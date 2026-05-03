@@ -17,42 +17,44 @@ export const useScrollReveal = (
 ): void => {
   const scrollObserverRef = useRef<IntersectionObserver | null>(null);
 
-  /**
-   * Identifies all revealable elements in the DOM and starts observing them.
-   */
-  const initializeScrollRevealObserver = useCallback((): void => {
-    const revealableElements = document.querySelectorAll('.reveal');
-    
+  useEffect(() => {
     const scrollObserver = new IntersectionObserver(
       (intersectionEntries) => {
         intersectionEntries.forEach((intersectionEntry) => {
           if (intersectionEntry.isIntersecting) {
-            // Add the visible class to trigger the CSS animation
             intersectionEntry.target.classList.add('visible');
-            
-            // Stop observing once the element is visible to save resources
             scrollObserver.unobserve(intersectionEntry.target);
           }
         });
       },
       { threshold: intersectionVisibilityThreshold }
     );
-    
-    scrollObserverRef.current = scrollObserver;
-    
-    // Register all identified elements with the observer
-    revealableElements.forEach((targetElement) => {
-      scrollObserver.observe(targetElement);
-    });
-  }, [intersectionVisibilityThreshold]);
 
-  useEffect(() => {
-    initializeScrollRevealObserver();
-    
-    // Clean up observer when the component or application unmounts
-    return () => {
-      scrollObserverRef.current?.disconnect();
+    scrollObserverRef.current = scrollObserver;
+
+    // Function to observe all current .reveal elements
+    const observeElements = () => {
+      const revealableElements = document.querySelectorAll('.reveal:not(.visible)');
+      revealableElements.forEach((el) => scrollObserver.observe(el));
     };
-  }, [initializeScrollRevealObserver]);
+
+    // Initial scan
+    observeElements();
+
+    // Use MutationObserver to catch lazy-loaded elements
+    const mutationObserver = new MutationObserver(() => {
+      observeElements();
+    });
+
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      scrollObserver.disconnect();
+      mutationObserver.disconnect();
+    };
+  }, [intersectionVisibilityThreshold]);
 };
 
