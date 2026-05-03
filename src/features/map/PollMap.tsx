@@ -1,3 +1,8 @@
+/**
+ * @file PollMap.tsx
+ * @description Interactive polling station locator with Google Maps integration, weather data, and trip estimations.
+ */
+
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Loader, Library } from '@googlemaps/js-api-loader';
 import { useGeolocation } from '@/hooks/useGeolocation';
@@ -14,106 +19,168 @@ import { MapPlaceholder } from './components/MapPlaceholder';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { WeatherData, PollingStation } from './types';
 
-/** Interactive section: locates user, shows weather, and renders nearby polling stations. */
+/**
+ * Interactive polling station map section.
+ * Locates the user, retrieves local weather, identifies nearby stations, 
+ * and provides interactive Google Maps navigation data.
+ * 
+ * @returns {JSX.Element} The rendered polling station map section.
+ */
 export const PollMap = () => {
-  const { phase, userPosition, locate } = useGeolocation();
+  const { 
+    status: locationRequestStatus, 
+    userPosition: currentUserCoordinates, 
+    startLocating: initiateLocationDetection 
+  } = useGeolocation();
+  
   const { trackEvent } = useAnalytics();
 
-  const sectionRef = useRef<HTMLElement>(null);
-  const mapRef = useRef<HTMLDivElement | null>(null);
-  const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-  const directionsRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const containerSectionRef = useRef<HTMLElement>(null);
+  const mapElementRef = useRef<HTMLDivElement | null>(null);
+  const googleMapsInstanceRef = useRef<google.maps.Map | null>(null);
+  const activeMapMarkersRef = useRef<google.maps.Marker[]>([]);
+  const directionsOverlayRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [locationName, setLocationName] = useState<string>('');
-  const [stations, setStations] = useState<PollingStation[]>([]);
-  const [selectedStation, setSelectedStation] = useState<PollingStation | null>(null);
-  const [isMapVisible, setIsMapVisible] = useState<boolean>(false);
+  const [currentWeatherData, setCurrentWeatherData] = useState<WeatherData | null>(null);
+  const [currentLocationDisplayName, setCurrentLocationDisplayName] = useState<string>('');
+  const [nearbyPollingStations, setNearbyPollingStations] = useState<PollingStation[]>([]);
+  const [activePollingStation, setActivePollingStation] = useState<PollingStation | null>(null);
+  const [isMapComponentVisible, setIsMapComponentVisible] = useState<boolean>(false);
 
-  // ── Intersection Observer to defer Map loading ──────────────────────────────
+  /**
+   * ── Intersection Observer to defer Google Maps loading ──────────────────────────────
+   * This improves initial page load performance by only loading the heavy Maps JS
+   * when the user scrolls near the map section.
+   */
   useEffect(() => {
-    if (!sectionRef.current) return;
+    if (!containerSectionRef.current) {
+      return;
+    }
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setIsMapVisible(true);
-          observer.disconnect();
+    const visibilityObserver = new IntersectionObserver(
+      ([intersectionEntry]) => {
+        if (intersectionEntry.isIntersecting) {
+          setIsMapComponentVisible(true);
+          visibilityObserver.disconnect();
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '200px' } // Load map 200px before it enters the viewport
     );
 
-    observer.observe(sectionRef.current);
-    return () => observer.disconnect();
+    visibilityObserver.observe(containerSectionRef.current);
+    
+    return () => visibilityObserver.disconnect();
   }, []);
 
-  // ── Fetch weather + build stations ──────────────────────────────────────────
+  /**
+   * ── Fetch location-specific data (Weather, Place Name, Stations) ──────────────────────
+   */
   useEffect(() => {
-    if (!userPosition) return;
+    if (!currentUserCoordinates) {
+      return;
+    }
 
-    fetchWeather(userPosition.lat, userPosition.lng)
-      .then(setWeather)
-      .catch(() => {});
+    const { latitude, longitude } = currentUserCoordinates;
 
-    reverseGeocode(userPosition.lat, userPosition.lng)
-      .then(setLocationName)
-      .catch(() => setLocationName('Your Location'));
+    // 1. Fetch current weather for the user's geographic coordinates
+    fetchWeather(latitude, longitude)
+      .then(setCurrentWeatherData)
+      .catch((weatherFetchError) => {
+        console.error('[PollMap] Failed to fetch weather data:', weatherFetchError);
+      });
 
-    const built = buildPollingStations(userPosition) as PollingStation[];
-    setStations(built);
-    setSelectedStation(built[0] ?? null);
-  }, [userPosition]);
+    // 2. Resolve coordinates to a human-readable city or town name
+    reverseGeocode(latitude, longitude)
+      .then(setCurrentLocationDisplayName)
+      .catch(() => setCurrentLocationDisplayName('Your Location'));
 
-  // ── Initialise Google Map (only when visible + user position ready) ──────────
+    // 3. Generate mock polling stations relative to the user's current position
+    const generatedStations = buildPollingStations(currentUserCoordinates) as PollingStation[];
+    setNearbyPollingStations(generatedStations);
+    
+    // Automatically select the geographically nearest station initially
+    setActivePollingStation(generatedStations[0] ?? null);
+  }, [currentUserCoordinates]);
+
+  /**
+   * ── Initialize Google Maps API and Instance ──────────────────────────────────────────
+   */
   useEffect(() => {
-    if (!mapRef.current || !MAPS_CONFIGURED || !userPosition || !isMapVisible) return;
+    if (
+      !mapElementRef.current || 
+      !MAPS_CONFIGURED || 
+      !currentUserCoordinates || 
+      !isMapComponentVisible
+    ) {
+      return;
+    }
 
-    const loader = new Loader({
+    const mapsApiLoader = new Loader({
       apiKey: MAPS_API_KEY,
       version: 'weekly',
       libraries: ['places', 'directions'] as Library[],
     });
 
-    loader.load().then((google) => {
-      if (!googleMapRef.current && mapRef.current) {
-        googleMapRef.current = new google.maps.Map(mapRef.current, {
-          center: userPosition,
+    mapsApiLoader.load().then((googleMapsLibraryInstances) => {
+      if (!googleMapsInstanceRef.current && mapElementRef.current) {
+        // Initialize the core Map Instance
+        googleMapsInstanceRef.current = new googleMapsLibraryInstances.maps.Map(mapElementRef.current, {
+          center: { 
+            lat: currentUserCoordinates.latitude, 
+            lng: currentUserCoordinates.longitude 
+          },
           zoom: 13,
           mapTypeId: 'roadmap',
           styles: MAP_STYLES,
           streetViewControl: false,
           mapTypeControl: false,
           fullscreenControl: true,
-          gestureHandling: 'cooperative', // Mobile-friendly scrolling
+          gestureHandling: 'cooperative',
         });
 
-        directionsRendererRef.current = new google.maps.DirectionsRenderer({
+        // Initialize the Directions Renderer overlay
+        directionsOverlayRendererRef.current = new googleMapsLibraryInstances.maps.DirectionsRenderer({
           suppressMarkers: true,
-          polylineOptions: { strokeColor: '#9a7322', strokeWeight: 4, strokeOpacity: 0.8 },
+          polylineOptions: { 
+            strokeColor: '#9a7322', 
+            strokeWeight: 4, 
+            strokeOpacity: 0.8 
+          },
         });
-        directionsRendererRef.current.setMap(googleMapRef.current);
+        directionsOverlayRendererRef.current.setMap(googleMapsInstanceRef.current);
       }
     });
-  }, [isMapVisible, userPosition]);
+  }, [isMapComponentVisible, currentUserCoordinates]);
 
-  // ── Update Markers ────────────────────────────────────────────────────────
+  /**
+   * ── Update Map Markers (User Location + Polling Stations) ──────────────────────────
+   */
   useEffect(() => {
-    if (!googleMapRef.current || !userPosition) return;
+    if (!googleMapsInstanceRef.current || !currentUserCoordinates) {
+      return;
+    }
 
-    markersRef.current.forEach((m) => m.setMap(null));
-    markersRef.current = [];
+    // Clear existing markers from the map before adding new ones
+    activeMapMarkersRef.current.forEach((markerInstance) => markerInstance.setMap(null));
+    activeMapMarkersRef.current = [];
 
-    const google = (window as any).google;
-    if (!google) return;
+    const googleMapsNamespace = (window as any).google;
+    if (!googleMapsNamespace) {
+      return;
+    }
 
-    const userMarker = new google.maps.Marker({
-      position: userPosition,
-      map: googleMapRef.current,
+    const currentUserPositionOnMap = { 
+      lat: currentUserCoordinates.latitude, 
+      lng: currentUserCoordinates.longitude 
+    };
+
+    // 1. Add User's Current Location Marker
+    const userLocationMarker = new googleMapsNamespace.maps.Marker({
+      position: currentUserPositionOnMap,
+      map: googleMapsInstanceRef.current,
       title: 'Your Location',
       icon: {
-        path: google.maps.SymbolPath.CIRCLE,
+        path: googleMapsNamespace.maps.SymbolPath.CIRCLE,
         scale: 10,
         fillColor: '#9a7322',
         fillOpacity: 1,
@@ -122,84 +189,124 @@ export const PollMap = () => {
       },
       zIndex: 999,
     });
-    markersRef.current.push(userMarker);
+    activeMapMarkersRef.current.push(userLocationMarker);
 
-    stations.forEach((station, index) => {
-      const marker = new google.maps.Marker({
-        position: { lat: station.lat, lng: station.lng },
-        map: googleMapRef.current,
-        title: station.name,
+    // 2. Add Nearby Polling Station Markers
+    nearbyPollingStations.forEach((stationItem, stationIndex) => {
+      const stationMarker = new googleMapsNamespace.maps.Marker({
+        position: { lat: stationItem.latitude, lng: stationItem.longitude },
+        map: googleMapsInstanceRef.current,
+        title: stationItem.stationName,
         icon: {
-          path: google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
+          path: googleMapsNamespace.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
           scale: 7,
-          fillColor: index === 0 ? '#1a7a3f' : '#2563eb',
+          fillColor: stationIndex === 0 ? '#1a7a3f' : '#2563eb',
           fillOpacity: 0.9,
           strokeColor: '#fff',
           strokeWeight: 2,
         },
-        label: { text: String(index + 1), color: '#fff', fontSize: '10px', fontWeight: '700' },
+        label: { 
+          text: String(stationIndex + 1), 
+          color: '#fff', 
+          fontSize: '10px', 
+          fontWeight: '700' 
+        },
       });
 
-      const infoWindow = new google.maps.InfoWindow({
-        content: `<div style="font-family:'Inter',sans-serif;padding:4px 0">
-          <strong style="color:#1a1611">${station.name}</strong><br>
-          <span style="color:#6b6252;font-size:12px">${station.type}</span><br>
-          <span style="color:#9a7322;font-size:12px">
-            🚗 ${station.driveMinutes} min · 🚶 ${station.walkMinutes} min · ${formatDistance(station.distanceKm)}
-          </span></div>`,
+      const stationDetailsInfoWindow = new googleMapsNamespace.maps.InfoWindow({
+        content: `
+          <div style="font-family:'Inter',sans-serif;padding:4px 0">
+            <strong style="color:#1a1611">${stationItem.stationName}</strong><br>
+            <span style="color:#6b6252;font-size:12px">${stationItem.stationType}</span><br>
+            <span style="color:#9a7322;font-size:12px">
+              🚗 ${stationItem.estimatedDriveMinutes} min · 🚶 ${stationItem.estimatedWalkMinutes} min · ${formatDistance(stationItem.distanceInKilometers)}
+            </span>
+          </div>`,
       });
 
-      marker.addListener('click', () => {
-        if (googleMapRef.current) {
-          infoWindow.open(googleMapRef.current, marker);
-          setSelectedStation(station);
-          trackEvent('map_marker_click', { station_name: station.name });
+      stationMarker.addListener('click', () => {
+        if (googleMapsInstanceRef.current) {
+          stationDetailsInfoWindow.open(googleMapsInstanceRef.current, stationMarker);
+          setActivePollingStation(stationItem);
+          trackEvent('map_marker_click', { station_name: stationItem.stationName });
         }
       });
 
-      markersRef.current.push(marker);
+      activeMapMarkersRef.current.push(stationMarker);
     });
 
-    googleMapRef.current.panTo(userPosition);
-  }, [userPosition, stations, trackEvent]);
+    // Smoothly pan the map to center on the user's location
+    googleMapsInstanceRef.current.panTo(currentUserPositionOnMap);
+  }, [currentUserCoordinates, nearbyPollingStations, trackEvent]);
 
-  // ── Show directions ────────────────────────────────────────────────────────
+  /**
+   * ── Calculate and Display Directions Overlay ────────────────────────────────────────
+   */
   useEffect(() => {
-    if (!selectedStation || !googleMapRef.current || !MAPS_CONFIGURED || !userPosition) return;
+    if (
+      !activePollingStation || 
+      !googleMapsInstanceRef.current || 
+      !MAPS_CONFIGURED || 
+      !currentUserCoordinates
+    ) {
+      return;
+    }
 
-    const google = (window as any).google;
-    if (!google) return;
+    const googleMapsNamespace = (window as any).google;
+    if (!googleMapsNamespace) {
+      return;
+    }
 
-    const directionsService = new google.maps.DirectionsService();
-    directionsService.route(
+    const directionsRoutingService = new googleMapsNamespace.maps.DirectionsService();
+    
+    directionsRoutingService.route(
       {
-        origin: userPosition,
-        destination: { lat: selectedStation.lat, lng: selectedStation.lng },
-        travelMode: google.maps.TravelMode.DRIVING,
+        origin: { 
+          lat: currentUserCoordinates.latitude, 
+          lng: currentUserCoordinates.longitude 
+        },
+        destination: { 
+          lat: activePollingStation.latitude, 
+          lng: activePollingStation.longitude 
+        },
+        travelMode: googleMapsNamespace.maps.TravelMode.DRIVING,
       },
-      (result: google.maps.DirectionsResult | null, status: any) => {
-        if (status === 'OK' && result) {
-          directionsRendererRef.current?.setDirections(result);
+      (directionsRouteResult: google.maps.DirectionsResult | null, googleMapsApiRequestStatus: any) => {
+        if (googleMapsApiRequestStatus === 'OK' && directionsRouteResult) {
+          directionsOverlayRendererRef.current?.setDirections(directionsRouteResult);
         }
       }
     );
-  }, [selectedStation, userPosition]);
+  }, [activePollingStation, currentUserCoordinates]);
 
-  const handleSelectStation = useCallback((station: PollingStation) => {
-    setSelectedStation(station);
-    if (googleMapRef.current) {
-      googleMapRef.current.panTo({ lat: station.lat, lng: station.lng });
-      googleMapRef.current.setZoom(14);
+  /**
+   * Selection handler for when a user interacts with the station list sidebar.
+   * Pans the map to the selected station and updates active state.
+   * 
+   * @param {PollingStation} selectedStation - The station chosen from the list.
+   */
+  const selectPollingStationFromSidebar = useCallback((selectedStation: PollingStation) => {
+    setActivePollingStation(selectedStation);
+    
+    if (googleMapsInstanceRef.current) {
+      googleMapsInstanceRef.current.panTo({ 
+        lat: selectedStation.latitude, 
+        lng: selectedStation.longitude 
+      });
+      googleMapsInstanceRef.current.setZoom(14);
     }
   }, []);
 
-  const stationCountLabel = useMemo(
-    () => `${stations.length} polling station${stations.length !== 1 ? 's' : ''} found nearby`,
-    [stations.length]
+  /**
+   * Accessible text summarizing the number of nearby stations found.
+   */
+  const nearbyStationsSummaryText = useMemo(
+    () => `${nearbyPollingStations.length} polling station${nearbyPollingStations.length !== 1 ? 's' : ''} found nearby`,
+    [nearbyPollingStations.length]
   );
 
   return (
-    <section id="pollmap" aria-labelledby="pollmap-heading" ref={sectionRef}>
+    <section id="pollmap" aria-labelledby="pollmap-heading" ref={containerSectionRef}>
       <div className="section-inner">
         <p className="section-label reveal">Live Civic Tools</p>
         <h2 className="section-title reveal" id="pollmap-heading">
@@ -210,7 +317,7 @@ export const PollMap = () => {
           estimated travel times — powered by Google Maps.
         </p>
 
-        {phase === 'idle' && (
+        {locationRequestStatus === 'idle' && (
           <div className="pollmap-cta reveal">
             <div className="pollmap-cta-icon" aria-hidden="true">🗺️</div>
             <h3>Locate Polling Stations Near You</h3>
@@ -219,11 +326,11 @@ export const PollMap = () => {
               conditions. Your location is never stored or shared.
             </p>
             <button
-              id="locate-btn"
+              id="locate-polling-station-btn"
               className="btn-primary"
               style={{ marginTop: '1.5rem' }}
               onClick={() => {
-                locate();
+                initiateLocationDetection();
                 trackEvent('map_locate_start');
               }}
             >
@@ -237,45 +344,58 @@ export const PollMap = () => {
           </div>
         )}
 
-        {phase === 'locating' && (
+        {locationRequestStatus === 'locating' && (
           <div className="pollmap-cta reveal" aria-live="polite" aria-busy="true">
             <div className="pollmap-spinner" aria-hidden="true" />
-            <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>Detecting your location…</p>
+            <p style={{ marginTop: '1rem', color: 'var(--text-muted)' }}>
+              Detecting your current location…
+            </p>
           </div>
         )}
 
-        {phase === 'ready' && (
+        {locationRequestStatus === 'ready' && (
           <div className="pollmap-grid reveal">
             <div className="pollmap-sidebar">
-              <WeatherCard weather={weather} locationName={locationName} />
-              {stations.length > 0 && (
+              <WeatherCard 
+                currentWeatherData={currentWeatherData} 
+                locationDisplayName={currentLocationDisplayName} 
+              />
+              {nearbyPollingStations.length > 0 && (
                 <>
-                  <p className="sr-only" aria-live="polite">{stationCountLabel}</p>
+                  <p className="sr-only" aria-live="polite">
+                    {nearbyStationsSummaryText}
+                  </p>
                   <StationList
-                    stations={stations}
-                    selectedId={selectedStation?.id ?? null}
-                    onSelect={handleSelectStation}
+                    pollingStations={nearbyPollingStations}
+                    activeStationId={activePollingStation?.id ?? null}
+                    onStationSelection={selectPollingStationFromSidebar}
                   />
                 </>
               )}
-              {selectedStation && <TripCard station={selectedStation} />}
+              {activePollingStation && (
+                <TripCard targetStation={activePollingStation} />
+              )}
             </div>
 
             <div className="pollmap-map-wrap">
               <ErrorBoundary 
-                fallback={<div className="pollmap-map-placeholder">Map failed to load. Please refresh.</div>}
-                componentName="GoogleMap"
+                errorFallbackUI={
+                  <div className="pollmap-map-placeholder">
+                    Google Maps failed to load. Please check your connection or refresh.
+                  </div>
+                }
+                targetComponentName="GoogleMap"
               >
                 {MAPS_CONFIGURED ? (
                   <div
-                    ref={mapRef}
+                    ref={mapElementRef}
                     className="pollmap-map"
-                    aria-label="Google Map showing nearby polling stations"
+                    aria-label="Interactive Google Map showing nearby polling stations"
                     role="application"
                     style={{ width: '100%', height: '480px' }} // CLS prevention
                   />
                 ) : (
-                  <MapPlaceholder userPosition={userPosition} />
+                  <MapPlaceholder currentUserCoordinates={currentUserCoordinates} />
                 )}
               </ErrorBoundary>
             </div>
@@ -285,3 +405,6 @@ export const PollMap = () => {
     </section>
   );
 };
+
+
+

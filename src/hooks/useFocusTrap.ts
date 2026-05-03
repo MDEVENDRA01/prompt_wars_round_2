@@ -1,51 +1,77 @@
+/**
+ * @file useFocusTrap.ts
+ * @description Hook that traps keyboard focus within a specific DOM container, essential for modal accessibility.
+ */
+
 import { useEffect, useRef, RefObject } from 'react';
 
 /**
- * Hook to trap keyboard focus within a container element.
- * Useful for modals and dialogs to ensure accessibility.
+ * Traps keyboard focus within a container element to prevent users from tabbing out of active modals or dialogs.
+ * Restores focus to the previously active element when the trap is deactivated.
+ *
+ * @param {RefObject<HTMLElement>} containerRef - React ref pointing to the container element to trap focus within.
+ * @param {boolean} isTrapActive - Flag to enable or disable the focus trap.
  */
-export const useFocusTrap = (ref: RefObject<HTMLElement>, isActive: boolean) => {
-  const previousFocus = useRef<HTMLElement | null>(null);
+export const useFocusTrap = (containerRef: RefObject<HTMLElement>, isTrapActive: boolean) => {
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!isActive || !ref.current) return;
-
-    previousFocus.current = document.activeElement as HTMLElement;
-    const container = ref.current;
-
-    const focusableElements = container.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    const firstElement = focusableElements[0] as HTMLElement;
-    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
-
-    if (firstElement) {
-      firstElement.focus();
+    if (!isTrapActive || !containerRef.current) {
+      return;
     }
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
+    // Capture the element that was focused before the trap was activated
+    previouslyFocusedElementRef.current = document.activeElement as HTMLElement;
+    
+    const containerElement = containerRef.current;
 
-      if (e.shiftKey) {
-        if (document.activeElement === firstElement) {
-          e.preventDefault();
-          lastElement.focus();
+    // Selector for all potentially interactive elements
+    const interactiveElementsSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    const interactiveElements = containerElement.querySelectorAll(interactiveElementsSelector);
+    
+    const firstFocusableElement = interactiveElements[0] as HTMLElement;
+    const lastFocusableElement = interactiveElements[interactiveElements.length - 1] as HTMLElement;
+
+    // Set initial focus to the first interactive element
+    if (firstFocusableElement) {
+      firstFocusableElement.focus();
+    }
+
+    /**
+     * Handles the 'Tab' key press to cycle focus within the container boundaries.
+     * 
+     * @param {KeyboardEvent} keyboardEvent - The native keyboard event.
+     */
+    const handleTrapKeyDown = (keyboardEvent: KeyboardEvent) => {
+      if (keyboardEvent.key !== 'Tab') {
+        return;
+      }
+
+      if (keyboardEvent.shiftKey) {
+        // Shift + Tab: Move focus to the end if we're at the start
+        if (document.activeElement === firstFocusableElement) {
+          keyboardEvent.preventDefault();
+          lastFocusableElement.focus();
         }
       } else {
-        if (document.activeElement === lastElement) {
-          e.preventDefault();
-          firstElement.focus();
+        // Tab: Move focus to the start if we're at the end
+        if (document.activeElement === lastFocusableElement) {
+          keyboardEvent.preventDefault();
+          firstFocusableElement.focus();
         }
       }
     };
 
-    container.addEventListener('keydown', handleKeyDown);
+    containerElement.addEventListener('keydown', handleTrapKeyDown);
 
     return () => {
-      container.removeEventListener('keydown', handleKeyDown);
-      if (previousFocus.current) {
-        previousFocus.current.focus();
+      // Cleanup: remove listener and restore focus to the original element
+      containerElement.removeEventListener('keydown', handleTrapKeyDown);
+      
+      if (previouslyFocusedElementRef.current) {
+        previouslyFocusedElementRef.current.focus();
       }
     };
-  }, [isActive, ref]);
+  }, [isTrapActive, containerRef]);
 };
+

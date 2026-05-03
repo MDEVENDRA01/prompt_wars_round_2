@@ -1,52 +1,81 @@
+/**
+ * @file Glossary.tsx
+ * @description Searchable glossary component defining key election terms and concepts.
+ */
+
 import { useState, useCallback, useMemo, ChangeEvent, memo } from 'react';
 import { glossaryTerms } from '@/data/content';
 import { useDebounce } from '@/hooks/useDebounce';
 import { SEARCH_DEBOUNCE_MS } from '@/constants';
 import { sanitizeText } from '@/utils/sanitize';
 
-interface GlossaryItemData {
+/**
+ * Represents a single term and its definition in the election glossary.
+ */
+interface ElectionGlossaryItem {
+  /** The technical term or phrase. */
   term: string;
-  def: string;
+  /** The plain-language definition of the term. */
+  definition: string;
 }
 
-/** Individual glossary term card, memoized for performance. */
-const GlossaryCard = memo(({ item }: { item: GlossaryItemData }) => (
+/** 
+ * Individual glossary term card displaying the term and its definition.
+ * Optimized with React.memo to prevent unnecessary re-renders during search input.
+ * 
+ * @param {Object} props - Component props.
+ * @param {ElectionGlossaryItem} props.glossaryItem - The glossary entry to display.
+ */
+const GlossaryTermCard = memo(({ glossaryItem }: { glossaryItem: ElectionGlossaryItem }) => (
   <article className="glossary-card reveal" role="listitem">
-    <div className="glossary-term">{item.term}</div>
-    <div className="glossary-def">{item.def}</div>
+    <div className="glossary-term">{glossaryItem.term}</div>
+    <div className="glossary-def">{glossaryItem.definition}</div>
   </article>
 ));
 
-GlossaryCard.displayName = 'GlossaryCard';
+GlossaryTermCard.displayName = 'GlossaryTermCard';
 
 /**
- * Searchable election glossary section.
- * Uses a debounced search input to filter terms without excessive re-renders.
+ * Interactive election glossary with debounced search functionality.
+ * Allows users to filter through technical election terminology.
+ * 
+ * @returns {JSX.Element} The rendered glossary section.
  */
 export const Glossary = () => {
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const debouncedQuery = useDebounce(searchQuery, SEARCH_DEBOUNCE_MS);
+  const [activeSearchQuery, setActiveSearchQuery] = useState<string>('');
+  const debouncedSearchQuery = useDebounce(activeSearchQuery, SEARCH_DEBOUNCE_MS);
 
-  const handleSearchChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(sanitizeText(event.target.value));
+  /**
+   * Updates the search query state with sanitized input.
+   */
+  const handleSearchInputChange = useCallback((inputEvent: ChangeEvent<HTMLInputElement>) => {
+    setActiveSearchQuery(sanitizeText(inputEvent.target.value));
   }, []);
 
-  const filteredTerms = useMemo(() => {
-    const normalised = debouncedQuery.toLowerCase().trim();
-    const allTerms = glossaryTerms as GlossaryItemData[];
-    if (!normalised) return allTerms;
-    return allTerms.filter(
-      (item) =>
-        item.term.toLowerCase().includes(normalised) ||
-        item.def.toLowerCase().includes(normalised)
+  /**
+   * Filters the glossary terms based on the debounced search query.
+   * Matches against both the term and the definition.
+   */
+  const filteredGlossaryTerms = useMemo(() => {
+    const normalizedQuery = debouncedSearchQuery.toLowerCase().trim();
+    const allGlossaryEntries = glossaryTerms as unknown as ElectionGlossaryItem[];
+    
+    if (!normalizedQuery) {
+      return allGlossaryEntries;
+    }
+    
+    return allGlossaryEntries.filter(
+      (entry) =>
+        entry.term.toLowerCase().includes(normalizedQuery) ||
+        entry.definition.toLowerCase().includes(normalizedQuery)
     );
-  }, [debouncedQuery]);
+  }, [debouncedSearchQuery]);
 
   return (
-    <section id="glossary" aria-labelledby="gloss-heading">
+    <section id="glossary" aria-labelledby="glossary-heading">
       <div className="section-inner">
         <p className="section-label reveal">Key Terms</p>
-        <h2 className="section-title reveal" id="gloss-heading">
+        <h2 className="section-title reveal" id="glossary-heading">
           Election <em>Glossary</em>
         </h2>
         <p className="section-desc reveal">
@@ -54,31 +83,34 @@ export const Glossary = () => {
           news with confidence.
         </p>
 
-        {/* Debounced search */}
+        {/* Debounced search input field */}
         <div className="glossary-search reveal">
           <input
-            id="glossary-search"
+            id="glossary-search-input"
             type="search"
             className="glossary-search-input"
             placeholder="Search terms…"
-            value={searchQuery}
-            onChange={handleSearchChange}
+            value={activeSearchQuery}
+            onChange={handleSearchInputChange}
             aria-label="Search glossary terms"
-            aria-controls="glossary-results"
+            aria-controls="glossary-results-grid"
             autoComplete="off"
           />
         </div>
 
         <div
-          id="glossary-results"
+          id="glossary-results-grid"
           className="glossary-grid reveal-stagger"
           role="list"
           aria-live="polite"
-          aria-label={`${filteredTerms.length} term${filteredTerms.length !== 1 ? 's' : ''} found`}
+          aria-label={`${filteredGlossaryTerms.length} term${filteredGlossaryTerms.length !== 1 ? 's' : ''} found`}
         >
-          {filteredTerms.length > 0 ? (
-            filteredTerms.map((item) => (
-              <GlossaryCard key={item.term} item={item} />
+          {filteredGlossaryTerms.length > 0 ? (
+            filteredGlossaryTerms.map((glossaryEntry) => (
+              <GlossaryTermCard 
+                key={glossaryEntry.term} 
+                glossaryItem={glossaryEntry} 
+              />
             ))
           ) : (
             <p className="glossary-empty">No terms match your search.</p>
@@ -88,3 +120,4 @@ export const Glossary = () => {
     </section>
   );
 };
+

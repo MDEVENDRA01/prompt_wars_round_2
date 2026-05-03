@@ -1,42 +1,74 @@
+/**
+ * @file App.tsx
+ * @description Root application component that orchestrates the layout, routing (sections), 
+ * and global services like analytics and translation.
+ */
+
 import { Suspense, lazy } from 'react';
 import { useScrollReveal } from './hooks/useScrollReveal';
 import { useActiveSection } from './hooks/useActiveSection';
 import { useAnalytics } from './hooks/useAnalytics';
+
+// Global Component Imports
 import { GoogleTranslateInit } from './components/GoogleTranslate';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { HelpButton } from './components/HelpButton';
-import { ARIA_LABELS, APP_NAME, SKIP_LINK_TARGET } from './constants';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoadingSpinner } from './components/LoadingSpinner';
 
-// Route-level code splitting with React.lazy
-const Hero      = lazy(() => import('./features/hero/Hero').then((m) => ({ default: m.Hero })));
-const Stats     = lazy(() => import('./features/stats/Stats').then((m) => ({ default: m.StatsSection })));
-const Timeline  = lazy(() => import('./features/timeline/Timeline').then((m) => ({ default: m.Timeline })));
-const HowItWorks= lazy(() => import('./features/core/HowItWorks').then((m) => ({ default: m.HowItWorks })));
-const PollMap   = lazy(() => import('./features/map/PollMap').then((m) => ({ default: m.PollMap })));
-const Quiz      = lazy(() => import('./features/quiz/Quiz').then((m) => ({ default: m.Quiz })));
-const Glossary  = lazy(() => import('./features/core/Glossary').then((m) => ({ default: m.Glossary })));
-const CTA       = lazy(() => import('./features/core/CTA').then((m) => ({ default: m.CTA })));
+// Application Constants
+import { ARIA_LABELS, APP_NAME, SKIP_LINK_TARGET } from './constants';
 
-/** Root application component. Assembles all page sections with lazy loading. */
+/**
+ * Lazy-loaded feature sections to optimize initial bundle size and load time.
+ */
+const LazyHeroSection      = lazy(() => import('./features/hero/Hero').then((module) => ({ default: module.Hero })));
+const LazyStatsSection     = lazy(() => import('./features/stats/Stats').then((module) => ({ default: module.StatsSection })));
+const LazyTimelineSection  = lazy(() => import('./features/timeline/Timeline').then((module) => ({ default: module.Timeline })));
+const LazyHowItWorksSection = lazy(() => import('./features/core/HowItWorks').then((module) => ({ default: module.HowItWorks })));
+const LazyPollMapSection   = lazy(() => import('./features/map/PollMap').then((module) => ({ default: module.PollMap })));
+const LazyQuizSection      = lazy(() => import('./features/quiz/Quiz').then((module) => ({ default: module.Quiz })));
+const LazyGlossarySection  = lazy(() => import('./features/core/Glossary').then((module) => ({ default: module.Glossary })));
+const LazyCTASection       = lazy(() => import('./features/core/CTA').then((module) => ({ default: module.CTA })));
+
+/**
+ * Root application component.
+ * Implements performance-critical features like scroll reveal, section tracking, 
+ * and lazy-loaded code splitting with comprehensive error boundaries.
+ * 
+ * @returns {JSX.Element} The rendered application shell.
+ */
 function App() {
+  // Initialize scroll animations and tracking
   useScrollReveal();
-  const activeSection = useActiveSection();
-  useAnalytics(activeSection);
+  const currentViewportActiveSectionId = useActiveSection();
+  
+  // Track page views and engagement based on active section
+  useAnalytics(currentViewportActiveSectionId);
+
+  /**
+   * Capitalizes the section ID for accessible screen reader announcements.
+   */
+  const formattedActiveSectionName = currentViewportActiveSectionId.charAt(0).toUpperCase() + 
+                                     currentViewportActiveSectionId.slice(1);
 
   return (
     <>
-      {/* Screen Reader Announcements for section changes */}
+      {/* Dynamic ARIA live region for screen reader navigation feedback */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
-        {`Viewing ${activeSection.charAt(0).toUpperCase() + activeSection.slice(1)} section`}
+        {`Viewing ${formattedActiveSectionName} section`}
       </div>
-      {/* Google Translate initialiser (no visible DOM output) */}
+
+      {/* Invisible Google Translate bridge component */}
       <GoogleTranslateInit />
 
-      {/* Accessibility: skip navigation link */}
-      <a id="skip-link" href={`#${SKIP_LINK_TARGET}`} className="skip-link sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-primary focus:text-white z-50">
+      {/* Accessibility enhancement: keyboard-only skip navigation link */}
+      <a
+        id="skip-to-content-link"
+        href={`#${SKIP_LINK_TARGET}`}
+        className="skip-link sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-primary focus:text-white z-50"
+      >
         {ARIA_LABELS.SKIP_LINK}
       </a>
 
@@ -44,62 +76,66 @@ function App() {
         <Navbar />
       </header>
 
-      <main id={SKIP_LINK_TARGET} role="main" aria-label={`${APP_NAME} main content`}>
-        <ErrorBoundary>
+      <main id={SKIP_LINK_TARGET} role="main" aria-label={`${APP_NAME} main content body`}>
+        
+        <ErrorBoundary componentName="HeroSection">
           <Suspense fallback={<LoadingSpinner label="Loading Hero section" />}>
-            <Hero />
+            <LazyHeroSection />
           </Suspense>
         </ErrorBoundary>
 
-        <ErrorBoundary>
+        <ErrorBoundary componentName="StatsSection">
           <Suspense fallback={<LoadingSpinner label="Loading statistics" />}>
-            <Stats />
+            <LazyStatsSection />
           </Suspense>
         </ErrorBoundary>
 
-        <ErrorBoundary>
+        <ErrorBoundary componentName="TimelineSection">
           <Suspense fallback={<LoadingSpinner label="Loading election timeline" />}>
-            <Timeline />
+            <LazyTimelineSection />
           </Suspense>
         </ErrorBoundary>
 
-        <ErrorBoundary>
+        <ErrorBoundary componentName="HowItWorksSection">
           <Suspense fallback={<LoadingSpinner label="Loading process steps" />}>
-            <HowItWorks />
+            <LazyHowItWorksSection />
           </Suspense>
         </ErrorBoundary>
 
-        <ErrorBoundary>
+        <ErrorBoundary componentName="PollMapSection">
           <Suspense fallback={<LoadingSpinner label="Loading polling station map" />}>
-            <PollMap />
+            <LazyPollMapSection />
           </Suspense>
         </ErrorBoundary>
 
-        <ErrorBoundary>
+        <ErrorBoundary componentName="QuizSection">
           <Suspense fallback={<LoadingSpinner label="Loading knowledge quiz" />}>
-            <Quiz />
+            <LazyQuizSection />
           </Suspense>
         </ErrorBoundary>
 
-        <ErrorBoundary>
+        <ErrorBoundary componentName="GlossarySection">
           <Suspense fallback={<LoadingSpinner label="Loading glossary" />}>
-            <Glossary />
+            <LazyGlossarySection />
           </Suspense>
         </ErrorBoundary>
 
-        <ErrorBoundary>
+        <ErrorBoundary componentName="CTASection">
           <Suspense fallback={<LoadingSpinner label="Loading call to action" />}>
-            <CTA />
+            <LazyCTASection />
           </Suspense>
         </ErrorBoundary>
+
       </main>
 
       <footer role="contentinfo">
         <Footer />
       </footer>
+      
       <HelpButton />
     </>
   );
 }
 
 export { App };
+

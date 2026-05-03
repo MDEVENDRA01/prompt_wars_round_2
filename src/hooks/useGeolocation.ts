@@ -1,26 +1,49 @@
+/**
+ * @file useGeolocation.ts
+ * @description Hook for requesting and managing the user's geographic coordinates using the Browser Geolocation API.
+ */
+
 import { useState } from 'react';
 
-export interface UserPosition {
-  lat: number;
-  lng: number;
+/**
+ * Geographic coordinates (latitude and longitude).
+ */
+export interface GeographicCoordinates {
+  /** Latitude in decimal degrees. */
+  latitude: number;
+  /** Longitude in decimal degrees. */
+  longitude: number;
 }
 
+/**
+ * Current status of the geolocation request process.
+ */
+export type GeolocationRequestStatus = 'idle' | 'locating' | 'ready' | 'denied' | 'error';
+
+/**
+ * State returned by the useGeolocation hook.
+ */
 export interface GeolocationState {
-  userPosition: UserPosition | null;
+  /** The user's geographic coordinates if successfully retrieved. */
+  userPosition: GeographicCoordinates | null;
+  /** Human-readable error message if the request fails. */
   error: string | null;
+  /** Whether a geolocation request is currently in progress. */
   loading: boolean;
-  phase: 'idle' | 'locating' | 'ready' | 'denied' | 'error';
-  locate: () => void;
+  /** High-level status of the geolocation request. */
+  status: GeolocationRequestStatus;
+  /** Function to initiate the geolocation request. */
+  startLocating: () => void;
 }
 
 /**
  * Custom hook to safely request and manage user geolocation.
  *
- * @returns {GeolocationState} An object containing userPosition, phase, and locate function.
+ * @returns {GeolocationState} An object containing userPosition, status, loading state, and startLocating function.
  */
 export const useGeolocation = (): GeolocationState => {
-  const [data, setData] = useState<{
-    userPosition: UserPosition | null;
+  const [geolocationData, setGeolocationData] = useState<{
+    userPosition: GeographicCoordinates | null;
     error: string | null;
     loading: boolean;
   }>({
@@ -29,45 +52,67 @@ export const useGeolocation = (): GeolocationState => {
     loading: false,
   });
 
-  const [phase, setPhase] = useState<GeolocationState['phase']>('idle');
+  const [geolocationStatus, setGeolocationStatus] = useState<GeolocationRequestStatus>('idle');
 
-  const locate = () => {
+  /**
+   * Initiates the browser's geolocation request sequence.
+   * Handles browser support checks, success, and error callbacks.
+   */
+  const initiateLocationDetection = () => {
     if (!('geolocation' in navigator)) {
-      setData((prev) => ({
-        ...prev,
+      setGeolocationData((previousData) => ({
+        ...previousData,
         error: 'Geolocation is not supported by your browser.',
         loading: false,
       }));
-      setPhase('error');
+      setGeolocationStatus('error');
       return;
     }
 
-    setPhase('locating');
-    setData((prev) => ({ ...prev, loading: true, error: null }));
+    setGeolocationStatus('locating');
+    setGeolocationData((previousData) => ({ 
+      ...previousData, 
+      loading: true, 
+      error: null 
+    }));
 
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setData({
+      (positionSuccessEvent) => {
+        setGeolocationData({
           userPosition: {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
+            latitude: positionSuccessEvent.coords.latitude,
+            longitude: positionSuccessEvent.coords.longitude,
           },
           error: null,
           loading: false,
         });
-        setPhase('ready');
+        setGeolocationStatus('ready');
       },
-      (error) => {
-        setData({
+      (geoErrorEvent) => {
+        setGeolocationData({
           userPosition: null,
-          error: error.message,
+          error: geoErrorEvent.message,
           loading: false,
         });
-        setPhase(error.code === error.PERMISSION_DENIED ? 'denied' : 'error');
+        
+        // Map browser error codes to our specialized status types
+        const isPermissionDenied = geoErrorEvent.code === geoErrorEvent.PERMISSION_DENIED;
+        setGeolocationStatus(isPermissionDenied ? 'denied' : 'error');
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      { 
+        enableHighAccuracy: true, 
+        timeout: 10000, 
+        maximumAge: 0 
+      }
     );
   };
 
-  return { ...data, phase, locate };
+  return { 
+    ...geolocationData, 
+    status: geolocationStatus, 
+    startLocating: initiateLocationDetection 
+  };
 };
+
+
+

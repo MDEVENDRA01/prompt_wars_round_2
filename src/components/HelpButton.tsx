@@ -1,116 +1,228 @@
+/**
+ * @file HelpButton.tsx
+ * @description Floating Action Button (FAB) that provides quick access to emergency services and assistance.
+ */
+
 import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 
-interface HelpOptionData {
-  id: string;
-  className: string;
-  icon: string;
-  label: string;
-  sub: string;
-  number: string;
+/**
+ * Data structure for an individual emergency contact option.
+ */
+interface EmergencyContactDetails {
+  /** Unique identifier for the contact option. */
+  optionId: string;
+  /** Custom CSS class for styling specific emergency types. */
+  optionCssClassName: string;
+  /** Visual emoji icon representation. */
+  optionEmojiIcon: string;
+  /** Primary title of the contact option. */
+  optionDisplayLabel: string;
+  /** Secondary information or description. */
+  optionSubtitleText: string;
+  /** The phone number to dial when selected. */
+  contactPhoneNumber: string;
 }
 
-interface HelpOptionProps {
-  option: HelpOptionData;
-  onSelect: (option: HelpOptionData) => void;
+/**
+ * Properties for the EmergencyContactOptionItem component.
+ */
+interface EmergencyContactProps {
+  /** The contact details to display. */
+  contactDetails: EmergencyContactDetails;
+  /** Callback function triggered when the option is selected. */
+  onOptionSelectionCallback: (details: EmergencyContactDetails) => void;
 }
 
-const HELP_OPTIONS: HelpOptionData[] = [
-  { id: 'police', className: 'hi-police', icon: '🚔', label: 'Call Police', sub: 'Emergency: 911', number: '911' },
-  { id: 'emergency', className: 'hi-emergency', icon: '🚨', label: 'Emergency', sub: 'General emergency line', number: '911' },
-  { id: 'medical', className: 'hi-medical', icon: '🏥', label: 'Medical Support', sub: 'Ambulance: 911', number: '911' },
-  { id: 'ambulance', className: 'hi-ambulance', icon: '🚑', label: 'Ambulance', sub: 'EMS dispatch', number: '911' },
-  { id: 'fire', className: 'hi-fire', icon: '🔥', label: 'Fire Department', sub: 'Fire emergency: 911', number: '911' },
-  { id: 'sos', className: 'hi-sos', icon: '🆘', label: 'SOS', sub: 'International distress', number: '112' },
+/**
+ * Predefined list of emergency contacts available in the help menu.
+ */
+const EMERGENCY_CONTACT_LIST: EmergencyContactDetails[] = [
+  { 
+    optionId: 'police', 
+    optionCssClassName: 'hi-police', 
+    optionEmojiIcon: '🚔', 
+    optionDisplayLabel: 'Call Police', 
+    optionSubtitleText: 'Emergency: 911', 
+    contactPhoneNumber: '911' 
+  },
+  { 
+    optionId: 'emergency', 
+    optionCssClassName: 'hi-emergency', 
+    optionEmojiIcon: '🚨', 
+    optionDisplayLabel: 'Emergency', 
+    optionSubtitleText: 'General emergency line', 
+    contactPhoneNumber: '911' 
+  },
+  { 
+    optionId: 'medical', 
+    optionCssClassName: 'hi-medical', 
+    optionEmojiIcon: '🏥', 
+    optionDisplayLabel: 'Medical Support', 
+    optionSubtitleText: 'Ambulance: 911', 
+    contactPhoneNumber: '911' 
+  },
+  { 
+    optionId: 'ambulance', 
+    optionCssClassName: 'hi-ambulance', 
+    optionEmojiIcon: '🚑', 
+    optionDisplayLabel: 'Ambulance', 
+    optionSubtitleText: 'EMS dispatch', 
+    contactPhoneNumber: '911' 
+  },
+  { 
+    optionId: 'fire', 
+    optionCssClassName: 'hi-fire', 
+    optionEmojiIcon: '🔥', 
+    optionDisplayLabel: 'Fire Department', 
+    optionSubtitleText: 'Fire emergency: 911', 
+    contactPhoneNumber: '911' 
+  },
+  { 
+    optionId: 'sos', 
+    optionCssClassName: 'hi-sos', 
+    optionEmojiIcon: '🆘', 
+    optionDisplayLabel: 'SOS', 
+    optionSubtitleText: 'International distress', 
+    contactPhoneNumber: '112' 
+  },
 ];
 
-/** Single emergency option in the help menu. */
-const HelpOption = memo(({ option, onSelect }: HelpOptionProps) => {
+/** 
+ * Visual representation of a single emergency contact within the help menu.
+ * 
+ * @param {EmergencyContactProps} props - Component props.
+ * @returns {JSX.Element} The rendered contact button.
+ */
+const EmergencyContactOptionItem = memo(({ 
+  contactDetails, 
+  onOptionSelectionCallback 
+}: EmergencyContactProps) => {
   return (
     <button
-      className={`help-item ${option.className}`}
-      aria-label={`${option.label} — ${option.sub}`}
-      onClick={() => onSelect(option)}
+      className={`help-item ${contactDetails.optionCssClassName}`}
+      aria-label={`${contactDetails.optionDisplayLabel} — ${contactDetails.optionSubtitleText}`}
+      onClick={() => onOptionSelectionCallback(contactDetails)}
     >
-      <div className="help-item-icon" aria-hidden="true">{option.icon}</div>
+      <div className="help-item-icon" aria-hidden="true">
+        {contactDetails.optionEmojiIcon}
+      </div>
       <div className="help-item-text">
-        <span className="help-item-label">{option.label}</span>
-        <span className="help-item-sub">{option.sub}</span>
+        <span className="help-item-label">{contactDetails.optionDisplayLabel}</span>
+        <span className="help-item-sub">{contactDetails.optionSubtitleText}</span>
       </div>
     </button>
   );
 });
 
-HelpOption.displayName = 'HelpOption';
+EmergencyContactOptionItem.displayName = 'EmergencyContactOptionItem';
 
-/** Floating emergency help button (SOS) with expandable quick-dial menu. */
+/** 
+ * Floating Action Button (FAB) that expands to reveal a menu of emergency contact options.
+ * Features accessibility enhancements like focus trapping and keyboard navigation.
+ * 
+ * @returns {JSX.Element} The rendered FAB component.
+ */
 export const HelpButton = () => {
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [isHelpMenuExpanded, setIsHelpMenuExpanded] = useState<boolean>(false);
+  const helpMenuContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Trap focus when open
-  useFocusTrap(containerRef, isOpen);
+  // Restrict keyboard focus to within the menu when it is expanded
+  useFocusTrap(helpMenuContainerRef, isHelpMenuExpanded);
 
-  // Close when clicking outside or pressing Escape
+  // Close the menu when clicking outside or pressing the Escape key
   useEffect(() => {
-    const handleOutsideClick = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
+    /**
+     * Handles clicks outside the help menu to close it automatically.
+     */
+    const handleGlobalInteractionClick = (interactionEvent: MouseEvent) => {
+      if (
+        helpMenuContainerRef.current && 
+        !helpMenuContainerRef.current.contains(interactionEvent.target as Node)
+      ) {
+        setIsHelpMenuExpanded(false);
       }
     };
-    const handleEscape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setIsOpen(false);
+
+    /**
+     * Handles Escape key presses to close the expanded menu.
+     */
+    const handleGlobalEscapeKeyPress = (keyboardEvent: globalThis.KeyboardEvent) => {
+      if (keyboardEvent.key === 'Escape') {
+        setIsHelpMenuExpanded(false);
+      }
     };
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('keydown', handleEscape);
+
+    document.addEventListener('mousedown', handleGlobalInteractionClick);
+    document.addEventListener('keydown', handleGlobalEscapeKeyPress);
+    
     return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener('mousedown', handleGlobalInteractionClick);
+      document.removeEventListener('keydown', handleGlobalEscapeKeyPress);
     };
   }, []);
 
-  const handleCall = useCallback((option: HelpOptionData) => {
-    window.location.href = `tel:${option.number}`;
-    setIsOpen(false);
+  /**
+   * Initiates a phone call to the selected emergency service.
+   * 
+   * @param {EmergencyContactDetails} contactOption - The selected contact details.
+   */
+  const initiateEmergencyPhoneCall = useCallback((contactOption: EmergencyContactDetails) => {
+    window.location.href = `tel:${contactOption.contactPhoneNumber}`;
+    setIsHelpMenuExpanded(false);
   }, []);
 
-  const handleToggle = useCallback(() => {
-    setIsOpen((prev) => !prev);
+  /**
+   * Toggles the expanded state of the emergency help menu.
+   */
+  const toggleHelpMenuVisibility = useCallback(() => {
+    setIsHelpMenuExpanded((previousState) => !previousState);
   }, []);
 
   return (
     <div
       className="help-fab"
-      ref={containerRef}
+      ref={helpMenuContainerRef}
       role="complementary"
-      aria-label="Emergency help"
+      aria-label="Emergency help and assistance"
     >
-      {isOpen && (
+      {isHelpMenuExpanded && (
         <div
-          id="help-menu"
+          id="help-options-menu-dialog"
           className="help-menu"
           role="dialog"
-          aria-label="Emergency options"
+          aria-label="Emergency contact options"
           aria-modal="true"
         >
-          <div className="help-menu-title" aria-live="polite">🆘 Emergency Help Options</div>
-          {HELP_OPTIONS.map((option) => (
-            <HelpOption key={option.id} option={option} onSelect={handleCall} />
+          <div className="help-menu-title" aria-live="polite">
+            🆘 Emergency Help Options
+          </div>
+          {EMERGENCY_CONTACT_LIST.map((contactItem) => (
+            <EmergencyContactOptionItem 
+              key={contactItem.optionId} 
+              contactDetails={contactItem} 
+              onOptionSelectionCallback={initiateEmergencyPhoneCall} 
+            />
           ))}
         </div>
       )}
 
       <button
-        id="help-trigger-btn"
-        className={`help-trigger${isOpen ? ' open' : ''}`}
-        aria-label={isOpen ? 'Close emergency menu' : 'Open emergency help menu'}
-        aria-expanded={isOpen}
-        aria-controls="help-menu"
-        onClick={handleToggle}
+        id="help-menu-toggle-trigger"
+        className={`help-trigger${isHelpMenuExpanded ? ' open' : ''}`}
+        aria-label={isHelpMenuExpanded ? 'Close emergency menu' : 'Open emergency help menu'}
+        aria-expanded={isHelpMenuExpanded}
+        aria-controls="help-options-menu-dialog"
+        onClick={toggleHelpMenuVisibility}
       >
-        {!isOpen && <span className="help-pulse" aria-hidden="true" />}
-        <span aria-hidden="true">{isOpen ? '✕' : '🆘'}</span>
+        {!isHelpMenuExpanded && (
+          <span className="help-pulse" aria-hidden="true" />
+        )}
+        <span aria-hidden="true">
+          {isHelpMenuExpanded ? '✕' : '🆘'}
+        </span>
       </button>
     </div>
   );
 };
+

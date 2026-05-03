@@ -1,11 +1,24 @@
-/** Call-to-action section encouraging civic participation. */
+/**
+ * @file CTA.tsx
+ * @description Final call-to-action section that encourages users to engage with the platform and share it.
+ */
+
+/** 
+ * Final call-to-action section encouraging civic participation and knowledge testing.
+ * 
+ * @returns {JSX.Element} The rendered CTA section.
+ */
 export const CTA = () => {
   return (
-    <section className="cta-section" aria-labelledby="cta-heading">
-      <div className="cta-inner">
-        <p className="section-label reveal" style={{ textAlign: 'center' }}>
+    <section className="civic-participation-cta" aria-labelledby="cta-heading">
+      <div className="cta-content-container">
+        <p 
+          className="section-label reveal" 
+          style={{ textAlign: 'center' }}
+        >
           Ready to Participate?
         </p>
+        
         <h2
           className="section-title reveal"
           id="cta-heading"
@@ -13,6 +26,7 @@ export const CTA = () => {
         >
           Your Vote is Your <em>Voice</em>
         </h2>
+        
         <p
           className="section-desc reveal"
           style={{ textAlign: 'center', margin: '1.3rem auto 2.8rem', maxWidth: '50ch' }}
@@ -20,6 +34,7 @@ export const CTA = () => {
           Democracy works when citizens are informed and engaged. Share this resource with friends
           and family to help them understand the process too.
         </p>
+        
         <div className="hero-cta reveal">
           <a href="#quiz" className="btn-primary">
             Retake the Quiz →
@@ -32,3 +47,4 @@ export const CTA = () => {
     </section>
   );
 };
+

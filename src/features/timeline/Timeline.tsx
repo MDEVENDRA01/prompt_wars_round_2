@@ -1,109 +1,169 @@
+/**
+ * @file Timeline.tsx
+ * @description Interactive election timeline component that explains different phases of the election process.
+ */
+
 import { useState, useRef, memo, useCallback, KeyboardEvent, RefObject } from 'react';
 import { phases } from '@/data/phases';
 
-interface Phase {
-  icon: string;
-  title: string;
-  short: string;
-  detail: string;
+/**
+ * Represents a single phase in the election timeline.
+ */
+interface ElectionPhase {
+  /** Emoji icon representing the phase. */
+  phaseIcon: string;
+  /** Formal title of the phase. */
+  phaseTitle: string;
+  /** Short summary description. */
+  shortDescription: string;
+  /** Detailed explanation of the phase. */
+  detailedInformation: string;
+  /** Associated keywords or topics. */
   tags: string[];
 }
 
-interface TimelineItemProps {
-  phase: Phase;
-  index: number;
-  isActive: boolean;
-  onSelect: (index: number) => void;
+/**
+ * Props for the TimelineListItem component.
+ */
+interface TimelineListItemProps {
+  /** The phase data to display. */
+  phaseData: ElectionPhase;
+  /** The zero-based index of this phase in the timeline. */
+  phaseIndex: number;
+  /** Whether this phase is currently selected. */
+  isCurrentlyActive: boolean;
+  /** Callback function when this phase is selected. */
+  onSelectPhase: (index: number) => void;
 }
 
-interface PhasePanelProps {
-  phase: Phase;
-  panelRef: RefObject<HTMLDivElement>;
+/**
+ * Props for the PhaseDetailPanel component.
+ */
+interface PhaseDetailPanelProps {
+  /** The phase data to display in detail. */
+  activePhaseData: ElectionPhase;
+  /** Ref for the panel element to manage focus. */
+  detailPanelRef: RefObject<HTMLDivElement>;
 }
 
-/** A single election phase row in the timeline list. */
-const TimelineItem = memo(({ phase, index, isActive, onSelect }: TimelineItemProps) => {
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      onSelect(index);
+/**
+ * A single election phase row in the timeline list.
+ * Optimized with React.memo to prevent unnecessary re-renders.
+ */
+const TimelineListItem = memo(({ 
+  phaseData, 
+  phaseIndex, 
+  isCurrentlyActive, 
+  onSelectPhase 
+}: TimelineListItemProps) => {
+  /**
+   * Handles keyboard interaction for the timeline item (Enter, Space, Arrows).
+   */
+  const handleItemKeyDown = useCallback((keyboardEvent: KeyboardEvent<HTMLDivElement>) => {
+    switch (keyboardEvent.key) {
+      case 'Enter':
+      case ' ':
+        keyboardEvent.preventDefault();
+        onSelectPhase(phaseIndex);
+        break;
+      case 'ArrowDown':
+        keyboardEvent.preventDefault();
+        onSelectPhase(Math.min(phaseIndex + 1, phases.length - 1));
+        break;
+      case 'ArrowUp':
+        keyboardEvent.preventDefault();
+        onSelectPhase(Math.max(phaseIndex - 1, 0));
+        break;
+      default:
+        break;
     }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      onSelect(Math.min(index + 1, phases.length - 1));
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      onSelect(Math.max(index - 1, 0));
-    }
-  }, [index, onSelect]);
+  }, [phaseIndex, onSelectPhase]);
 
   return (
     <div
-      className={`tl-item${isActive ? ' active' : ''}`}
+      className={`tl-item${isCurrentlyActive ? ' active' : ''}`}
       role="button"
       tabIndex={0}
-      aria-pressed={isActive}
-      aria-label={`Phase ${index + 1}: ${phase.title}`}
-      onClick={() => onSelect(index)}
-      onKeyDown={handleKeyDown}
+      aria-pressed={isCurrentlyActive}
+      aria-label={`Phase ${phaseIndex + 1}: ${phaseData.phaseTitle}`}
+      onClick={() => onSelectPhase(phaseIndex)}
+      onKeyDown={handleItemKeyDown}
     >
       <div className="tl-num" aria-hidden="true">
-        {String(index + 1).padStart(2, '0')}
+        {String(phaseIndex + 1).padStart(2, '0')}
       </div>
       <div className="tl-content">
-        <h3>{phase.title}</h3>
-        <p>{phase.short}</p>
+        <h3>{phaseData.phaseTitle}</h3>
+        <p>{phaseData.shortDescription}</p>
       </div>
     </div>
   );
 });
 
-TimelineItem.displayName = 'TimelineItem';
+TimelineListItem.displayName = 'TimelineListItem';
 
-/** Detail panel for the currently selected election phase. */
-const PhasePanel = memo(({ phase, panelRef }: PhasePanelProps) => {
+/**
+ * Detail panel for the currently selected election phase.
+ * Displays icons, full details, and associated tags.
+ */
+const PhaseDetailPanel = memo(({ activePhaseData, detailPanelRef }: PhaseDetailPanelProps) => {
   return (
     <div
       className="tl-panel reveal"
       aria-live="polite"
       aria-atomic="true"
-      aria-label="Phase details"
-      id="tl-panel"
+      aria-label="Election phase details"
+      id="tl-panel-display"
       tabIndex={-1}
-      ref={panelRef}
+      ref={detailPanelRef}
     >
-      <div className="tl-panel-icon" aria-hidden="true">{phase.icon}</div>
-      <h2>{phase.title}</h2>
-      <p>{phase.detail}</p>
-      <div className="tl-tags" aria-label="Related topics">
-        {phase.tags.map((tag) => (
-          <span key={tag} className="tl-tag">{tag}</span>
+      <div className="tl-panel-icon" aria-hidden="true">
+        {activePhaseData.phaseIcon}
+      </div>
+      <h2>{activePhaseData.phaseTitle}</h2>
+      <p>{activePhaseData.detailedInformation}</p>
+      <div className="tl-tags" aria-label="Related keywords">
+        {activePhaseData.tags.map((topicTag) => (
+          <span key={topicTag} className="tl-tag">
+            {topicTag}
+          </span>
         ))}
       </div>
     </div>
   );
 });
 
-PhasePanel.displayName = 'PhasePanel';
+PhaseDetailPanel.displayName = 'PhaseDetailPanel';
 
-/** Interactive election timeline — select a phase to view details. */
+/**
+ * Interactive election timeline component.
+ * Allows users to browse through election phases and view detailed information.
+ * 
+ * @returns {JSX.Element} The rendered timeline section.
+ */
 export const Timeline = () => {
-  const [activeIndex, setActiveIndex] = useState<number>(0);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const [currentSelectedPhaseIndex, setCurrentSelectedPhaseIndex] = useState<number>(0);
+  const detailPanelRef = useRef<HTMLDivElement>(null);
 
-  const handleSelect = useCallback((index: number) => {
-    setActiveIndex(index);
-    panelRef.current?.focus();
+  /**
+   * Updates the active phase and moves focus to the detail panel for accessibility.
+   */
+  const updateSelectedElectionPhase = useCallback((newPhaseIndex: number) => {
+    setCurrentSelectedPhaseIndex(newPhaseIndex);
+    
+    // Defer focus to allow React to update the DOM
+    window.setTimeout(() => {
+      detailPanelRef.current?.focus();
+    }, 50);
   }, []);
 
-  const activePhase = phases[activeIndex] as Phase;
+  const selectedPhaseData = phases[currentSelectedPhaseIndex] as ElectionPhase;
 
   return (
-    <section id="timeline" aria-labelledby="tl-heading">
+    <section id="timeline" aria-labelledby="timeline-heading">
       <div className="section-inner">
         <p className="section-label reveal">The Election Timeline</p>
-        <h2 className="section-title reveal" id="tl-heading">
+        <h2 className="section-title reveal" id="timeline-heading">
           From Candidacy to <em>Certification</em>
         </h2>
         <p className="section-desc reveal">
@@ -115,23 +175,28 @@ export const Timeline = () => {
           <div
             className="timeline-list reveal"
             role="list"
-            aria-label="Election phases — select a phase to view details"
-            id="tl-list"
+            aria-label="Election phases list"
+            id="tl-list-container"
           >
-            {phases.map((phase, index) => (
-              <TimelineItem
-                key={phase.title}
-                phase={phase as Phase}
-                index={index}
-                isActive={index === activeIndex}
-                onSelect={handleSelect}
+            {phases.map((phaseItem, itemIndex) => (
+              <TimelineListItem
+                key={phaseItem.phaseTitle}
+                phaseData={phaseItem as ElectionPhase}
+                phaseIndex={itemIndex}
+                isCurrentlyActive={itemIndex === currentSelectedPhaseIndex}
+                onSelectPhase={updateSelectedElectionPhase}
               />
             ))}
           </div>
 
-          <PhasePanel phase={activePhase} panelRef={panelRef} />
+          <PhaseDetailPanel 
+            activePhaseData={selectedPhaseData} 
+            detailPanelRef={detailPanelRef} 
+          />
         </div>
       </div>
     </section>
   );
 };
+
+

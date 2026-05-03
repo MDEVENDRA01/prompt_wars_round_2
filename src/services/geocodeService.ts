@@ -1,27 +1,47 @@
+/**
+ * @file geocodeService.ts
+ * @description Service for reverse-geocoding coordinates using the Nominatim OpenStreetMap API.
+ */
+
 import { GEOCODE_API_BASE } from '../constants';
 
 /**
  * Reverse-geocodes coordinates to a human-readable city/town name.
  * Uses the free Nominatim (OpenStreetMap) API — no key required.
  *
- * @param {number} latitude
- * @param {number} longitude
- * @returns {Promise<string>} Location name (city, town, village, or county).
- * @throws {Error} on network errors
+ * @param {number} latitude - The latitude of the location.
+ * @param {number} longitude - The longitude of the location.
+ * @returns {Promise<string>} Human-readable location name (city, town, village, or county).
+ * @throws {Error} Thrown if the API request fails.
  */
-export const reverseGeocode = async (latitude: number, longitude: number): Promise<string> => {
-  const url = new URL(GEOCODE_API_BASE);
-  url.searchParams.set('lat', String(latitude));
-  url.searchParams.set('lon', String(longitude));
-  url.searchParams.set('format', 'json');
+export const reverseGeocode = async (
+  latitude: number, 
+  longitude: number
+): Promise<string> => {
+  const geocodeUrl = new URL(GEOCODE_API_BASE);
+  geocodeUrl.searchParams.set('lat', String(latitude));
+  geocodeUrl.searchParams.set('lon', String(longitude));
+  geocodeUrl.searchParams.set('format', 'json');
 
-  const response = await fetch(url.href, {
+  const apiResponse = await fetch(geocodeUrl.href, {
     headers: { 'Accept-Language': 'en' },
   });
-  if (!response.ok) {
-    throw new Error(`Geocode API error: ${response.status}`);
+
+  if (!apiResponse.ok) {
+    throw new Error(`Geocode API error: ${apiResponse.status} ${apiResponse.statusText}`);
   }
-  const data = await response.json();
-  const { address } = data;
-  return address.city ?? address.town ?? address.village ?? address.county ?? 'Your Area';
+
+  const geocodeApiResponse = await apiResponse.json();
+  const { address: locationAddressDetails } = geocodeApiResponse;
+
+  // Fallback chain for different address granularity
+  const locationName = 
+    locationAddressDetails.city ?? 
+    locationAddressDetails.town ?? 
+    locationAddressDetails.village ?? 
+    locationAddressDetails.county ?? 
+    'Your Area';
+
+  return locationName;
 };
+

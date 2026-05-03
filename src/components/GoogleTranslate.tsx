@@ -1,17 +1,30 @@
+/**
+ * @file GoogleTranslate.tsx
+ * @description Background service initializer for Google Translate integration.
+ */
+
 import { useEffect } from 'react';
 
 /**
- * Initialises the Google Translate widget in a hidden container.
- * Exposes `window.__setGoogleTranslateLang(code)` for programmatic language switching.
+ * Initializes the Google Translate widget in a hidden container to provide localized content.
+ * Exposes a global `window.__setGoogleTranslateLang(code)` function for programmatic language switching.
  *
- * Renders no visible UI — the widget lives in a hidden container that our
- * custom LanguageSwitcher in Navbar.jsx proxies into.
+ * Renders no visible UI directly; the widget is managed in a hidden DOM element
+ * that the custom navbar language switcher proxies interaction into.
+ * 
+ * @returns {JSX.Element} A hidden container for the Google Translate widget.
  */
 export const GoogleTranslateInit = () => {
   useEffect(() => {
-    // Expose the init callback before the script loads
+    
+    /**
+     * Callback invoked by the Google Translate script upon initialization.
+     */
     window.googleTranslateElementInit = () => {
-      if (!window.google?.translate) return;
+      if (!window.google?.translate) {
+        return;
+      }
+      
       new window.google.translate.TranslateElement(
         {
           pageLanguage: 'en',
@@ -24,29 +37,48 @@ export const GoogleTranslateInit = () => {
       );
     };
 
-    // Programmatic language trigger used by LanguageSwitcher
-    window.__setGoogleTranslateLang = (languageCode: string) => {
-      const attemptSet = (attempts: number = 0) => {
-        const select = document.querySelector('#gt-hidden-container select.goog-te-combo') as HTMLSelectElement;
-        if (select) {
-          select.value = languageCode;
-          select.dispatchEvent(new Event('change', { bubbles: true }));
-        } else if (attempts < 20) {
-          setTimeout(() => attemptSet(attempts + 1), 250);
+    /**
+     * Programmatic language trigger exposed to the rest of the application.
+     * 
+     * @param {string} targetLanguageCode - The ISO language code to switch to.
+     */
+    window.__setGoogleTranslateLang = (targetLanguageCode: string) => {
+      
+      /**
+       * Recursively attempts to set the language on the Google Translate select element,
+       * retrying if the widget is still loading.
+       * 
+       * @param {number} retryAttemptCount - The current number of failed attempts.
+       */
+      const attemptLanguageSelectionWithRetry = (retryAttemptCount: number = 0) => {
+        const translateSelectElement = document.querySelector(
+          '#gt-hidden-container select.goog-te-combo'
+        ) as HTMLSelectElement;
+
+        if (translateSelectElement) {
+          translateSelectElement.value = targetLanguageCode;
+          translateSelectElement.dispatchEvent(new Event('change', { bubbles: true }));
+        } else if (retryAttemptCount < 20) {
+          // Retry every 250ms for up to 5 seconds
+          setTimeout(() => attemptLanguageSelectionWithRetry(retryAttemptCount + 1), 250);
         }
       };
-      attemptSet();
+
+      attemptLanguageSelectionWithRetry();
     };
 
-    // Inject the Google Translate script only once
-    if (!document.getElementById('gt-script')) {
-      const script = document.createElement('script');
-      script.id = 'gt-script';
-      script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
-      script.async = true;
-      document.head.appendChild(script);
+    // Inject the Google Translate core script only if it hasn't been added yet
+    const existingTranslateScript = document.getElementById('gt-script');
+    
+    if (!existingTranslateScript) {
+      const googleTranslateLoaderScript = document.createElement('script');
+      googleTranslateLoaderScript.id = 'gt-script';
+      googleTranslateLoaderScript.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+      googleTranslateLoaderScript.async = true;
+      document.head.appendChild(googleTranslateLoaderScript);
     }
 
+    // Cleanup global callbacks on component unmount
     return () => {
       window.googleTranslateElementInit = undefined;
       window.__setGoogleTranslateLang = undefined;
@@ -68,3 +100,4 @@ export const GoogleTranslateInit = () => {
     />
   );
 };
+

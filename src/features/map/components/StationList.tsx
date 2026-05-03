@@ -1,22 +1,37 @@
+/**
+ * @file StationList.tsx
+ * @description Sidebar list container for displaying multiple nearby polling stations.
+ */
+
 import { memo } from 'react';
 import { StationItem } from './StationItem';
 import { StationListProps } from '../types';
 
-/** List of nearby polling stations. */
-const StationListComponent = ({ stations, selectedId, onSelect }: StationListProps) => {
+/** 
+ * Sidebar list container for displaying multiple nearby polling stations.
+ * 
+ * @param {StationListProps} props - Component props.
+ * @returns {JSX.Element} The rendered station list.
+ */
+const PollingStationsSidebarList = ({ 
+  pollingStations, 
+  activeStationId, 
+  onStationSelection 
+}: StationListProps) => {
   return (
-    <div className="station-list" aria-label="Nearby polling stations">
+    <div className="station-list" aria-label="Nearby polling stations selection list">
       <div className="station-list-title">🗳️ Nearby Polling Stations</div>
-      {stations.map((station) => (
+      {pollingStations.map((stationItemData) => (
         <StationItem
-          key={station.id}
-          station={station}
-          isSelected={selectedId === station.id}
-          onSelect={onSelect}
+          key={stationItemData.id}
+          stationData={stationItemData}
+          isCurrentlySelected={activeStationId === stationItemData.id}
+          onStationSelection={onStationSelection}
         />
       ))}
     </div>
   );
 };
 
-export const StationList = memo(StationListComponent);
+export const StationList = memo(PollingStationsSidebarList);
+

@@ -1,7 +1,17 @@
+/**
+ * @file useSecureApi.ts
+ * @description Secure middleware hook for external API interactions.
+ * Handles JWT injection, response sanitization, and standardized error handling.
+ */
+
 import { useState, useCallback } from 'react';
 import DOMPurify from 'dompurify';
 
-interface FetchOptions extends RequestInit {
+/**
+ * Configuration options for the secure fetch request.
+ */
+interface SecureFetchOptions extends RequestInit {
+  /** Whether the request requires an authorization token. */
   requireAuth?: boolean;
 }
 
@@ -9,56 +19,75 @@ interface FetchOptions extends RequestInit {
  * Secure middleware hook for external API interactions.
  * Automatically injects authorization tokens, sanitizes responses, 
  * and standardizes error handling.
+ * 
+ * @returns {Object} An object containing fetchSecure, loading, and error states.
  */
 export const useSecureApi = () => {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isApiLoading, setIsApiLoading] = useState<boolean>(false);
+  const [apiError, setApiError] = useState<string | null>(null);
 
-  const fetchSecure = useCallback(async <T>(url: string, options: FetchOptions = {}): Promise<T | null> => {
-    setLoading(true);
-    setError(null);
+  /**
+   * Executes a secure fetch request with middleware features.
+   * 
+   * @template T The expected response data type.
+   * @param {string} url - The endpoint URL.
+   * @param {SecureFetchOptions} [options={}] - Fetch configuration options.
+   * @returns {Promise<T | null>} The sanitized response data or null on error.
+   */
+  const fetchSecure = useCallback(async <T>(
+    url: string, 
+    options: SecureFetchOptions = {}
+  ): Promise<T | null> => {
+    setIsApiLoading(true);
+    setApiError(null);
 
     try {
+      const requestHeaders = new Headers(options.headers);
+      
       // 1. JWT Injection (Middleware)
-      const headers = new Headers(options.headers);
       if (options.requireAuth) {
         // In a real app, retrieve token from secure HttpOnly cookie or Firebase Auth instance
-        const token = window.sessionStorage.getItem('auth_token'); 
-        if (token) {
-          headers.append('Authorization', `Bearer ${token}`);
+        const authToken = window.sessionStorage.getItem('auth_token'); 
+        if (authToken) {
+          requestHeaders.append('Authorization', `Bearer ${authToken}`);
         }
       }
 
       // 2. Enforce strict content types
-      headers.append('Content-Type', 'application/json');
-      headers.append('Accept', 'application/json');
+      requestHeaders.append('Content-Type', 'application/json');
+      requestHeaders.append('Accept', 'application/json');
 
-      const response = await fetch(url, {
+      const apiResponse = await fetch(url, {
         ...options,
-        headers,
+        headers: requestHeaders,
         // Ensure no credentials are leaked cross-origin unless explicitly requested
         credentials: options.credentials || 'same-origin', 
       });
 
-      if (!response.ok) {
-        throw new Error(`API Error: ${response.status} ${response.statusText}`);
+      if (!apiResponse.ok) {
+        throw new Error(`API Error: ${apiResponse.status} ${apiResponse.statusText}`);
       }
 
-      const rawData = await response.json();
+      const rawResponseData = await apiResponse.json();
 
-      // 3. XSS Sanitization (Deep traverse and sanitize string fields if needed)
-      // For demonstration, stringifying and sanitizing the whole payload, then parsing.
-      const sanitizedString = DOMPurify.sanitize(JSON.stringify(rawData));
-      const safeData = JSON.parse(sanitizedString) as T;
+      // 3. XSS Sanitization (Deep traverse and sanitize string fields)
+      // We stringify and sanitize the whole payload as a baseline security measure
+      const sanitizedResponseString = DOMPurify.sanitize(JSON.stringify(rawResponseData));
+      const safeResponseData = JSON.parse(sanitizedResponseString) as T;
 
-      return safeData;
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An unknown network error occurred.');
+      return safeResponseData;
+    } catch (networkError: unknown) {
+      const errorMessage = networkError instanceof Error 
+        ? networkError.message 
+        : 'An unknown network error occurred while communicating with the API.';
+      
+      setApiError(errorMessage);
       return null;
     } finally {
-      setLoading(false);
+      setIsApiLoading(false);
     }
   }, []);
 
-  return { fetchSecure, loading, error };
+  return { fetchSecure, loading: isApiLoading, error: apiError };
 };
+

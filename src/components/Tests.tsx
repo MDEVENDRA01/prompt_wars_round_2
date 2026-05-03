@@ -1,57 +1,84 @@
+/**
+ * @file Tests.tsx
+ * @description Component displaying the results of automated quality, security, and accessibility audits.
+ */
+
 import { useEffect, useRef, memo } from 'react';
 import { tests, categoryScores } from '../data/content';
 
-interface CatCardProps {
-  name: string;
-  score: number;
+/**
+ * Properties for a card displaying a specific audit category's score.
+ */
+interface AuditCategoryCardProps {
+  /** The name of the audit category (e.g., "Security"). */
+  categoryName: string;
+  /** The percentage score achieved (0-100). */
+  achievementScore: number;
 }
 
-const CatCard = memo(({ name, score }: CatCardProps) => {
-  const fillRef = useRef<HTMLDivElement | null>(null);
+/** 
+ * Visual card representing a category score with an animated progress bar.
+ * The bar animates only when it becomes visible in the viewport.
+ * 
+ * @param {AuditCategoryCardProps} props - Component props.
+ * @returns {JSX.Element} The rendered category score card.
+ */
+const AuditCategoryScoreCard = memo(({ 
+  categoryName, 
+  achievementScore 
+}: AuditCategoryCardProps) => {
+  const progressBarFillRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const el = fillRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          el.style.width = score + '%';
-          io.unobserve(el);
+    const progressBarElement = progressBarFillRef.current;
+    if (!progressBarElement) {
+      return;
+    }
+
+    const progressBarIntersectionObserver = new IntersectionObserver(
+      ([intersectionEntry]) => {
+        if (intersectionEntry.isIntersecting) {
+          // Animate the bar width to the target score
+          progressBarElement.style.width = `${achievementScore}%`;
+          progressBarIntersectionObserver.unobserve(progressBarElement);
         }
       },
       { threshold: 0.5 }
     );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [score]);
+
+    progressBarIntersectionObserver.observe(progressBarElement);
+    return () => progressBarIntersectionObserver.disconnect();
+  }, [achievementScore]);
 
   return (
     <div className="cat-card reveal">
-      <div className="cat-name">{name}</div>
-      <div className="cat-score">{score}%</div>
+      <div className="cat-name">{categoryName}</div>
+      <div className="cat-score">{achievementScore}%</div>
       <div className="cat-bar">
         <div
           className="cat-fill"
-          ref={fillRef}
+          ref={progressBarFillRef}
           style={{ width: '0%' }}
-          data-target={score}
+          data-target={achievementScore}
         />
       </div>
     </div>
   );
 });
 
-CatCard.displayName = 'CatCard';
+AuditCategoryScoreCard.displayName = 'AuditCategoryScoreCard';
 
 /**
  * Section detailing the QA metrics and automated test results.
+ * 
+ * @returns {JSX.Element} The rendered audit and tests section.
  */
 export const Tests = () => {
   return (
-    <section id="tests" aria-labelledby="tests-heading">
+    <section id="tests" aria-labelledby="tests-section-heading">
       <div className="section-inner">
         <p className="section-label reveal">Quality Assurance</p>
-        <h2 className="section-title reveal" id="tests-heading">
+        <h2 className="section-title reveal" id="tests-section-heading">
           All Tests <em>Passing</em>
         </h2>
         <p className="section-desc reveal">
@@ -76,7 +103,7 @@ export const Tests = () => {
         </div>
 
         <div className="reveal" style={{ overflowX: 'auto' }}>
-          <table className="test-table" aria-label="Automated test results">
+          <table className="test-table" aria-label="Detailed automated test results table">
             <thead>
               <tr>
                 <th scope="col">ID</th>
@@ -88,13 +115,13 @@ export const Tests = () => {
               </tr>
             </thead>
             <tbody>
-              {tests.map((t) => (
-                <tr key={t.id}>
-                  <td className="test-id">{t.id}</td>
-                  <td className="test-name">{t.name}</td>
-                  <td className="test-desc">{t.desc}</td>
+              {tests.map((testEntry) => (
+                <tr key={testEntry.id}>
+                  <td className="test-id">{testEntry.id}</td>
+                  <td className="test-name">{testEntry.name}</td>
+                  <td className="test-desc">{testEntry.description}</td>
                   <td>
-                    <span className="test-pass" aria-label="Test passing">
+                    <span className="test-pass" aria-label="Test status: passing">
                       PASS
                     </span>
                   </td>
@@ -104,12 +131,17 @@ export const Tests = () => {
           </table>
         </div>
 
-        <div className="category-scores reveal-stagger" aria-label="Score by category">
-          {categoryScores.map((cat) => (
-            <CatCard key={cat.name} name={cat.name} score={cat.score} />
+        <div className="category-scores reveal-stagger" aria-label="Audit scores by category">
+          {categoryScores.map((categoryScoreItem) => (
+            <AuditCategoryScoreCard 
+              key={categoryScoreItem.name} 
+              categoryName={categoryScoreItem.name} 
+              achievementScore={categoryScoreItem.score} 
+            />
           ))}
         </div>
       </div>
     </section>
   );
 };
+

@@ -1,36 +1,58 @@
+/**
+ * @file useScrollReveal.ts
+ * @description Hook that implements scroll-based reveal animations using the Intersection Observer API.
+ */
+
 import { useEffect, useRef, useCallback } from 'react';
 import { INTERSECTION_THRESHOLD } from '../constants';
 
 /**
- * Observes all elements with class `.reveal` and adds `.visible`
- * when they intersect the viewport. Cleans up on unmount.
+ * Automatically observes elements with the '.reveal' class and triggers a 'visible' CSS class
+ * when they enter the viewport boundaries.
  *
- * @param {number} [threshold] - Intersection threshold (0–1).
+ * @param {number} [intersectionVisibilityThreshold] - Percentage of the element (0.0 to 1.0) that must be visible to trigger.
  */
-export const useScrollReveal = (threshold: number = INTERSECTION_THRESHOLD): void => {
-  const observerRef = useRef<IntersectionObserver | null>(null);
+export const useScrollReveal = (
+  intersectionVisibilityThreshold: number = INTERSECTION_THRESHOLD
+): void => {
+  const scrollObserverRef = useRef<IntersectionObserver | null>(null);
 
-  const observe = useCallback((): void => {
-    const items = document.querySelectorAll('.reveal');
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('visible');
-            observer.unobserve(entry.target);
+  /**
+   * Identifies all revealable elements in the DOM and starts observing them.
+   */
+  const initializeScrollRevealObserver = useCallback((): void => {
+    const revealableElements = document.querySelectorAll('.reveal');
+    
+    const scrollObserver = new IntersectionObserver(
+      (intersectionEntries) => {
+        intersectionEntries.forEach((intersectionEntry) => {
+          if (intersectionEntry.isIntersecting) {
+            // Add the visible class to trigger the CSS animation
+            intersectionEntry.target.classList.add('visible');
+            
+            // Stop observing once the element is visible to save resources
+            scrollObserver.unobserve(intersectionEntry.target);
           }
         });
       },
-      { threshold }
+      { threshold: intersectionVisibilityThreshold }
     );
-    observerRef.current = observer;
-    items.forEach((element) => observer.observe(element));
-  }, [threshold]);
+    
+    scrollObserverRef.current = scrollObserver;
+    
+    // Register all identified elements with the observer
+    revealableElements.forEach((targetElement) => {
+      scrollObserver.observe(targetElement);
+    });
+  }, [intersectionVisibilityThreshold]);
 
   useEffect(() => {
-    observe();
+    initializeScrollRevealObserver();
+    
+    // Clean up observer when the component or application unmounts
     return () => {
-      observerRef.current?.disconnect();
+      scrollObserverRef.current?.disconnect();
     };
-  }, [observe]);
+  }, [initializeScrollRevealObserver]);
 };
+

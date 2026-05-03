@@ -1,37 +1,56 @@
+/**
+ * @file QuizOption.tsx
+ * @description Individual interactive option component for a multiple-choice quiz question.
+ */
+
 import { memo } from 'react';
 import { QuizOptionProps } from '../types';
 
-/** Single answer option button in the quiz. */
+/**
+ * Renders a single answer choice as a stylized radio button.
+ * Automatically handles visual feedback (correct/incorrect) once an answer is submitted.
+ * Optimized with React.memo for high-performance rendering within large lists of options.
+ * 
+ * @param {QuizOptionProps} props - Component props.
+ * @returns {JSX.Element} The rendered option button.
+ */
 export const QuizOption = memo(({
   letter,
-  text,
+  displayText,
   isSelected,
   isCorrect,
-  isWrong,
-  isAnswered,
-  onSelect,
+  wasSelectionIncorrect,
+  hasQuestionBeenAnswered,
+  onOptionSelectionCallback,
 }: QuizOptionProps) => {
-  const extraClass = isAnswered
+  /**
+   * Determine the semantic status class for the button based on the quiz state.
+   */
+  const conditionalStatusClassName = hasQuestionBeenAnswered
     ? isCorrect
       ? ' correct'
-      : isWrong
+      : wasSelectionIncorrect
       ? ' wrong'
       : ''
     : '';
 
   return (
     <button
-      className={`quiz-opt${extraClass}`}
+      className={`quiz-opt${conditionalStatusClassName}`}
       role="radio"
       aria-checked={isSelected}
-      aria-label={`${letter}: ${text}`}
-      disabled={isAnswered}
-      onClick={onSelect}
+      aria-label={`${letter}: ${displayText}`}
+      disabled={hasQuestionBeenAnswered}
+      onClick={onOptionSelectionCallback}
     >
-      <span className="opt-letter" aria-hidden="true">{letter}</span>
-      <span>{text}</span>
+      <span className="opt-letter" aria-hidden="true">
+        {letter}
+      </span>
+      <span>{displayText}</span>
     </button>
   );
 });
 
 QuizOption.displayName = 'QuizOption';
+
+

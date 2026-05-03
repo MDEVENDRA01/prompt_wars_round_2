@@ -1,3 +1,8 @@
+/**
+ * @file QuizQuestion.tsx
+ * @description Component that renders a single quiz question, its options, and feedback after submission.
+ */
+
 import { useState, useRef, useCallback } from 'react';
 import { questions } from '@/data/questions';
 import { QUIZ_LETTERS } from '@/constants';
@@ -5,31 +10,56 @@ import { QuizOption } from './QuizOption';
 import { QuizQuestionProps } from '../types';
 import { useAnalytics } from '@/hooks/useAnalytics';
 
-/** Renders a single quiz question with answer options and feedback. */
-export const QuizQuestion = ({ questionIndex, onAnswer }: QuizQuestionProps) => {
-  const question = questions[questionIndex];
-  const [selected, setSelected] = useState<number | null>(null);
-  const nextButtonRef = useRef<HTMLButtonElement | null>(null);
+/**
+ * Renders a single quiz question with multiple-choice options and provides feedback after selection.
+ * 
+ * @param {QuizQuestionProps} props - Component props.
+ * @returns {JSX.Element} The rendered quiz question section.
+ */
+export const QuizQuestion = ({ questionIndex, onAnswerSubmission }: QuizQuestionProps) => {
+  const currentQuestionData = questions[questionIndex];
+  const [selectedOptionIndex, setSelectedOptionIndex] = useState<number | null>(null);
+  const nextQuestionButtonRef = useRef<HTMLButtonElement | null>(null);
   const { trackEvent } = useAnalytics();
 
-  const isAnswered = selected !== null;
-  const isLastQuestion = questionIndex === questions.length - 1;
+  const hasUserAnsweredQuestion = selectedOptionIndex !== null;
+  const isLastQuestionInQuizSequence = questionIndex === questions.length - 1;
 
-  const handleSelectOption = useCallback((optionIndex: number) => {
-    if (selected !== null) return;
-    setSelected(optionIndex);
-    const isCorrect = optionIndex === question.ans;
-    onAnswer(isCorrect);
+  /**
+   * Handles the selection of a quiz option.
+   * Logs the event and triggers the onAnswerSubmission callback.
+   * 
+   * @param {number} answerChoiceIndex - The index of the selected option.
+   */
+  const handleOptionSelection = useCallback((answerChoiceIndex: number) => {
+    if (selectedOptionIndex !== null) {
+      return;
+    }
+
+    setSelectedOptionIndex(answerChoiceIndex);
+    const wasSelectionCorrect = answerChoiceIndex === currentQuestionData.correctAnswerIndex;
     
+    // Notify parent component of the result
+    onAnswerSubmission(wasSelectionCorrect);
+    
+    // Track the analytics event for this answer
     trackEvent('quiz_answer', {
       question_index: questionIndex,
-      is_correct: isCorrect,
+      is_correct: wasSelectionCorrect,
     });
 
-    setTimeout(() => nextButtonRef.current?.focus(), 50);
-  }, [selected, question.ans, onAnswer, questionIndex, trackEvent]);
+    // Auto-focus the next button for keyboard accessibility after a short delay
+    setTimeout(() => {
+      nextQuestionButtonRef.current?.focus();
+    }, 50);
+  }, [selectedOptionIndex, currentQuestionData.correctAnswerIndex, onAnswerSubmission, questionIndex, trackEvent]);
 
-  const handleNext = useCallback(() => onAnswer(null), [onAnswer]);
+  /**
+   * Proceeds to the next question by signaling the parent.
+   */
+  const requestProgressionToNextQuestion = useCallback(() => {
+    onAnswerSubmission(null);
+  }, [onAnswerSubmission]);
 
   return (
     <>
@@ -48,45 +78,54 @@ export const QuizQuestion = ({ questionIndex, onAnswer }: QuizQuestionProps) => 
       </p>
 
       <p className="quiz-q" id={`q-text-${questionIndex}`}>
-        {question.q}
+        {currentQuestionData.questionTitle}
       </p>
 
-      <div className="quiz-opts" role="radiogroup" aria-labelledby={`q-text-${questionIndex}`}>
-        {question.opts.map((optionText, optionIndex) => (
+      <div 
+        className="quiz-opts" 
+        role="radiogroup" 
+        aria-labelledby={`q-text-${questionIndex}`}
+      >
+        {currentQuestionData.possibleAnswerOptions.map((displayText, answerChoiceIndex) => (
           <QuizOption
-            key={optionIndex}
-            letter={QUIZ_LETTERS[optionIndex]}
-            text={optionText}
-            isSelected={selected === optionIndex}
-            isCorrect={isAnswered && optionIndex === question.ans}
-            isWrong={isAnswered && optionIndex === selected && optionIndex !== question.ans}
-            isAnswered={isAnswered}
-            onSelect={() => handleSelectOption(optionIndex)}
+            key={answerChoiceIndex}
+            letter={QUIZ_LETTERS[answerChoiceIndex]}
+            displayText={displayText}
+            isSelected={selectedOptionIndex === answerChoiceIndex}
+            isCorrect={hasUserAnsweredQuestion && answerChoiceIndex === currentQuestionData.correctAnswerIndex}
+            wasSelectionIncorrect={hasUserAnsweredQuestion && answerChoiceIndex === selectedOptionIndex && answerChoiceIndex !== currentQuestionData.correctAnswerIndex}
+            hasQuestionBeenAnswered={hasUserAnsweredQuestion}
+            onOptionSelectionCallback={() => handleOptionSelection(answerChoiceIndex)}
           />
         ))}
       </div>
 
-      {isAnswered && (
+      {hasUserAnsweredQuestion && (
         <div
-          className={`quiz-feedback show ${selected === question.ans ? 'correct' : 'wrong'}`}
+          className={`quiz-feedback show ${selectedOptionIndex === currentQuestionData.correctAnswerIndex ? 'correct' : 'wrong'}`}
           role="alert"
           aria-live="assertive"
           aria-atomic="true"
         >
-          {selected === question.ans ? question.feedback : question.wrongFeedback}
+          {selectedOptionIndex === currentQuestionData.correctAnswerIndex 
+            ? currentQuestionData.positiveReinforcementMessage 
+            : currentQuestionData.educationalCorrectionMessage
+          }
         </div>
       )}
 
-      <div className={`quiz-next${isAnswered ? ' show' : ''}`}>
+      <div className={`quiz-next${hasUserAnsweredQuestion ? ' show' : ''}`}>
         <button
           id="quiz-next-btn"
           className="btn-primary"
-          ref={nextButtonRef}
-          onClick={handleNext}
+          ref={nextQuestionButtonRef}
+          onClick={requestProgressionToNextQuestion}
         >
-          {isLastQuestion ? 'See Results →' : 'Next Question →'}
+          {isLastQuestionInQuizSequence ? 'See Results →' : 'Next Question →'}
         </button>
       </div>
     </>
   );
 };
+
+

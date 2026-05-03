@@ -1,19 +1,28 @@
+/**
+ * @file Quiz.tsx
+ * @description Main container for the election knowledge quiz feature.
+ */
+
 import { questions } from '@/data/questions';
 import { isFirebaseConfigured } from '@/firebase';
 import { useQuiz } from './hooks/useQuiz';
 import { QuizQuestion } from './components/QuizQuestion';
 import { QuizScore } from './components/QuizScore';
 
-/** Interactive election knowledge quiz with progress indicators. */
+/**
+ * Interactive election knowledge quiz with progress indicators and scoring.
+ * 
+ * @returns {JSX.Element} The rendered quiz section.
+ */
 export const Quiz = () => {
   const {
-    questionIndex,
-    score,
-    isAnswered,
-    isDone,
-    handleAnswer,
-    handleRetry,
-    getPipClass,
+    currentQuestionIndex,
+    userTotalScore,
+    hasAnswerBeenSubmitted,
+    isQuizSessionFinished,
+    processAnswerSubmission,
+    resetQuizSession,
+    calculateProgressPipClassName,
   } = useQuiz();
 
   return (
@@ -31,42 +40,46 @@ export const Quiz = () => {
         <div
           className="quiz-box reveal"
           role="region"
-          aria-label={isAnswered ? 'Quiz — answer submitted' : 'Election knowledge quiz'}
+          aria-label={hasAnswerBeenSubmitted ? 'Quiz — answer submitted' : 'Election knowledge quiz'}
         >
+          {/* Visual progress bar with individual pips for each question */}
           <div
             className="quiz-progress"
             role="progressbar"
             aria-valuemin={0}
             aria-valuemax={questions.length}
-            aria-valuenow={questionIndex}
+            aria-valuenow={currentQuestionIndex}
             aria-label="Quiz progress"
           >
-            {questions.map((_, pipIndex) => (
+            {questions.map((_, progressBarPipIndex) => (
               <div
-                key={pipIndex}
-                className={getPipClass(pipIndex)}
+                key={progressBarPipIndex}
+                className={calculateProgressPipClassName(progressBarPipIndex)}
                 aria-hidden="true"
               />
             ))}
           </div>
 
           <div id="quiz-content">
-            {isDone ? (
+            {isQuizSessionFinished ? (
               <QuizScore
-                score={score}
-                total={questions.length}
-                onRetry={handleRetry}
+                correctAnswersCount={userTotalScore}
+                totalQuestionsCount={questions.length}
+                onRestartQuiz={resetQuizSession}
               />
             ) : (
               <QuizQuestion
-                key={questionIndex}
-                questionIndex={questionIndex}
-                onAnswer={handleAnswer}
+                key={currentQuestionIndex}
+                questionIndex={currentQuestionIndex}
+                onAnswerSubmission={processAnswerSubmission}
               />
             )}
+
           </div>
         </div>
       </div>
     </section>
   );
 };
+
+

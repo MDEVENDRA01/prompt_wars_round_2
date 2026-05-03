@@ -1,62 +1,97 @@
 /**
- * Compute the Haversine distance (km) between two lat/lng coordinates.
- * @param {number} lat1 - Latitude of first point.
- * @param {number} lon1 - Longitude of first point.
- * @param {number} lat2 - Latitude of second point.
- * @param {number} lon2 - Longitude of second point.
- * @returns {number} Distance in kilometers.
+ * @file geo.ts
+ * @description Geographic utility functions for distance calculations and time estimations.
  */
-export const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const EARTH_RADIUS_KM = 6371;
-  const toRad = (deg: number): number => (deg * Math.PI) / 180;
-  const deltaLat = toRad(lat2 - lat1);
-  const deltaLon = toRad(lon2 - lon1);
-  const sinHalfLat = Math.sin(deltaLat / 2);
-  const sinHalfLon = Math.sin(deltaLon / 2);
-  const a =
-    sinHalfLat * sinHalfLat +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * sinHalfLon * sinHalfLon;
-  return EARTH_RADIUS_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+/** Earth's radius in kilometers for Haversine calculations. */
+const EARTH_RADIUS_KILOMETERS = 6371;
+
+/** Estimated average urban driving speed in kilometers per hour. */
+const AVERAGE_DRIVING_SPEED_KMH = 27;
+
+/** Estimated average walking pace in kilometers per hour. */
+const AVERAGE_WALKING_SPEED_KMH = 5;
+
+/**
+ * Computes the Haversine distance (km) between two latitude/longitude coordinates.
+ * 
+ * @param {number} startLatitude - Latitude of the first point.
+ * @param {number} startLongitude - Longitude of the first point.
+ * @param {number} endLatitude - Latitude of the second point.
+ * @param {number} endLongitude - Longitude of the second point.
+ * @returns {number} The great-circle distance between the two points in kilometers.
+ */
+export const haversineKm = (
+  startLatitude: number, 
+  startLongitude: number, 
+  endLatitude: number, 
+  endLongitude: number
+): number => {
+  const convertToRadians = (degrees: number): number => (degrees * Math.PI) / 180;
+  
+  const latitudeDifferenceRadians = convertToRadians(endLatitude - startLatitude);
+  const longitudeDifferenceRadians = convertToRadians(endLongitude - startLongitude);
+  
+  const halfLatitudeDifferenceSin = Math.sin(latitudeDifferenceRadians / 2);
+  const halfLongitudeDifferenceSin = Math.sin(longitudeDifferenceRadians / 2);
+  
+  // Haversine formula 'a' parameter (square of half the chord length between the points)
+  const chordLengthSquared =
+    halfLatitudeDifferenceSin * halfLatitudeDifferenceSin +
+    Math.cos(convertToRadians(startLatitude)) * 
+    Math.cos(convertToRadians(endLatitude)) * 
+    halfLongitudeDifferenceSin * halfLongitudeDifferenceSin;
+  
+  // Haversine formula 'c' parameter (angular distance in radians)
+  const angularDistanceRadians = 2 * Math.atan2(
+    Math.sqrt(chordLengthSquared), 
+    Math.sqrt(1 - chordLengthSquared)
+  );
+    
+  return EARTH_RADIUS_KILOMETERS * angularDistanceRadians;
 };
 
 /**
- * Estimate drive time in minutes given distance (km).
- * Assumes ~27 km/h average urban speed.
+ * Estimates drive time in minutes given distance.
+ * 
+ * @param {number} distanceKilometers - Distance in kilometers.
+ * @returns {number} Estimated drive time in minutes (minimum 3 minutes).
+ */
+export const estimateDriveMinutes = (distanceKilometers: number): number => {
+  const estimatedMinutes = (distanceKilometers / AVERAGE_DRIVING_SPEED_KMH) * 60;
+  return Math.max(3, Math.round(estimatedMinutes));
+};
+
+/**
+ * Estimates walk time in minutes given distance.
+ * 
+ * @param {number} distanceKilometers - Distance in kilometers.
+ * @returns {number} Estimated walking time in minutes (minimum 1 minute).
+ */
+export const estimateWalkMinutes = (distanceKilometers: number): number => {
+  const estimatedMinutes = (distanceKilometers / AVERAGE_WALKING_SPEED_KMH) * 60;
+  return Math.max(1, Math.round(estimatedMinutes));
+};
+
+/**
+ * Formats a distance value to a human-readable string with one decimal place.
+ * 
  * @param {number} distanceKm - Distance in kilometers.
- * @returns {number} Estimated drive time in minutes.
+ * @returns {string} Formatted distance string (e.g., "5.2 km").
  */
-export const estimateDriveMinutes = (distanceKm: number): number => {
-  const AVG_DRIVE_SPEED_KMH = 27;
-  return Math.max(3, Math.round((distanceKm / AVG_DRIVE_SPEED_KMH) * 60));
+export const formatDistance = (distanceKm: number): string => {
+  return `${distanceKm.toFixed(1)} km`;
 };
 
 /**
- * Estimate walk time in minutes given distance (km).
- * Assumes ~5 km/h walking pace.
- * @param {number} distanceKm - Distance in kilometers.
- * @returns {number} Estimated walking time in minutes.
+ * Clamps a numeric value between a minimum and maximum range.
+ * 
+ * @param {number} numericValue - The value to clamp.
+ * @param {number} minimumLimit - The lower bound.
+ * @param {number} maximumLimit - The upper bound.
+ * @returns {number} The clamped value.
  */
-export const estimateWalkMinutes = (distanceKm: number): number => {
-  const AVG_WALK_SPEED_KMH = 5;
-  return Math.max(1, Math.round((distanceKm / AVG_WALK_SPEED_KMH) * 60));
+export const clampValue = (numericValue: number, minimumLimit: number, maximumLimit: number): number => {
+  return Math.min(Math.max(numericValue, minimumLimit), maximumLimit);
 };
 
-/**
- * Format a floating-point distance to one decimal place.
- * @param {number} km - Distance in kilometers.
- * @returns {string} Formatted distance string.
- */
-export const formatDistance = (km: number): string => {
-  return `${km.toFixed(1)} km`;
-};
-
-/**
- * Clamp a numeric value between min and max.
- * @param {number} value - Value to clamp.
- * @param {number} min - Minimum value.
- * @param {number} max - Maximum value.
- * @returns {number} Clamped value.
- */
-export const clamp = (value: number, min: number, max: number): number => {
-  return Math.min(Math.max(value, min), max);
-};

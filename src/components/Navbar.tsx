@@ -1,28 +1,51 @@
+/**
+ * @file Navbar.tsx
+ * @description Primary navigation component featuring language localization, mobile-responsive menu, and section-based highlighting.
+ */
+
 import { useState, useCallback, memo, KeyboardEvent, MouseEvent } from 'react';
 import { useActiveSection } from '../hooks/useActiveSection';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { GoogleTranslateInit } from './GoogleTranslate';
 import { LANGUAGES, NAV_LINKS, APP_NAME, ARIA_LABELS, STORAGE_KEYS } from '../constants';
 
-interface Language {
-  code: string;
-  gtCode: string;
-  label: string;
-  flag: string;
+/**
+ * Configuration for an application-supported language.
+ */
+interface AppLanguageConfiguration {
+  /** ISO 639-1 language code. */
+  languageCode: string;
+  /** Specialized language code used for Google Translate integration. */
+  googleTranslateCode: string;
+  /** Display label for the language (e.g., "English", "Español"). */
+  languageLabel: string;
+  /** Emoji flag representation of the language. */
+  flagEmoji: string;
 }
 
+/**
+ * Properties for a single navigation link item.
+ */
 interface NavLinkProps {
-  href: string;
-  label: string;
-  aria: string;
-  sectionId: string;
-  activeSection: string;
-  onClick: () => void;
+  /** The target internal anchor URL (e.g., "#hero"). */
+  targetAnchorUrl: string;
+  /** The human-readable text to display for the link. */
+  displayLabel: string;
+  /** Descriptive ARIA label for screen readers. */
+  accessibleAriaLabel: string;
+  /** The unique ID of the section this link targets. */
+  targetSectionId: string;
+  /** The ID of the section currently active in the viewport. */
+  currentActiveSectionId: string;
+  /** Callback function triggered when the link is activated. */
+  onLinkClickCallback: () => void;
 }
 
 // ── Icon Components ───────────────────────────────────────────────────────────
 
-/** Globe SVG icon for the language switcher. */
+/** 
+ * Globe SVG icon used as a visual indicator for the language selection tool.
+ */
 const GlobeIcon = memo(() => {
   return (
     <svg
@@ -45,7 +68,9 @@ const GlobeIcon = memo(() => {
 
 GlobeIcon.displayName = 'GlobeIcon';
 
-/** Chevron-down icon for the language dropdown toggle. */
+/** 
+ * Chevron SVG icon used to indicate the presence of a dropdown menu.
+ */
 const ChevronDownIcon = memo(() => {
   return (
     <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13" aria-hidden="true">
@@ -60,86 +85,116 @@ const ChevronDownIcon = memo(() => {
 
 ChevronDownIcon.displayName = 'ChevronDownIcon';
 
-// ── Language Switcher ─────────────────────────────────────────────────────────
+// ── Language Selector ─────────────────────────────────────────────────────────
 
 /**
- * Dropdown that lets users choose a display language via Google Translate.
- * Selected language is persisted to localStorage.
+ * Interactive dropdown component for selecting the application's display language.
+ * Integrates with the Google Translate background service for automated localization.
+ * 
+ * @returns {JSX.Element} The rendered language selector.
  */
-const LanguageSwitcher = () => {
-  const [isOpen, setIsOpen] = useState<boolean>(false);
-  const [selectedCode, setSelectedCode] = useLocalStorage<string>(STORAGE_KEYS.LANGUAGE, 'en');
+const LanguageSelectorDropdown = () => {
+  const [isLanguageDropdownOpen, setIsLanguageDropdownOpen] = useState<boolean>(false);
+  const [activeLanguageCode, setActiveLanguageCode] = useLocalStorage<string>(
+    STORAGE_KEYS.LANGUAGE, 
+    'en'
+  );
 
-  const selectedLanguage = LANGUAGES.find((l) => l.code === selectedCode) ?? LANGUAGES[0];
+  const currentSelectedLanguage = LANGUAGES.find(
+    (lang) => lang.code === activeLanguageCode
+  ) ?? (LANGUAGES[0] as unknown as AppLanguageConfiguration);
 
-  const handleSelectLanguage = useCallback((language: Language) => {
-    setSelectedCode(language.code);
-    setIsOpen(false);
-    document.documentElement.lang = language.code;
+  /**
+   * Processes a language change request.
+   * Updates local state and triggers the global translation service.
+   * 
+   * @param {AppLanguageConfiguration} selectedLanguage - The language configuration to apply.
+   */
+  const applyLanguageSelection = useCallback((selectedLanguage: AppLanguageConfiguration) => {
+    setActiveLanguageCode(selectedLanguage.languageCode);
+    setIsLanguageDropdownOpen(false);
+    
+    // Set root document language for accessibility compliance
+    document.documentElement.lang = selectedLanguage.languageCode;
 
-    if (language.gtCode === 'en') {
-      // Attempt to restore original — Google Translate uses a cookie
-      const restoreBtn = document.querySelector('.goog-te-restore, a.goog-logo-link') as HTMLElement;
-      if (restoreBtn) restoreBtn.click();
+    if (selectedLanguage.googleTranslateCode === 'en') {
+      // Revert to original English content
+      const googleTranslateRestoreTrigger = document.querySelector(
+        '.goog-te-restore, a.goog-logo-link'
+      ) as HTMLElement;
+      
+      if (googleTranslateRestoreTrigger) {
+        googleTranslateRestoreTrigger.click();
+      }
     } else {
-      window.__setGoogleTranslateLang?.(language.gtCode);
+      // Dispatch language code to the background Google Translate service
+      window.__setGoogleTranslateLang?.(selectedLanguage.googleTranslateCode);
     }
-  }, [setSelectedCode]);
+  }, [setActiveLanguageCode]);
 
-  const handleToggle = useCallback(() => {
-    setIsOpen((prev) => !prev);
+  const toggleDropdownVisibility = useCallback(() => {
+    setIsLanguageDropdownOpen((previousState) => !previousState);
   }, []);
 
-  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') setIsOpen(false);
+  const handleDropdownKeyboardEvents = useCallback((keydownEvent: KeyboardEvent<HTMLDivElement>) => {
+    if (keydownEvent.key === 'Escape') {
+      setIsLanguageDropdownOpen(false);
+    }
   }, []);
 
   return (
-    <div className="lang-switcher" onKeyDown={handleKeyDown}>
+    <div className="language-switcher-container" onKeyDown={handleDropdownKeyboardEvents}>
       <button
-        id="lang-switcher-btn"
-        className={`lang-btn${isOpen ? ' open' : ''}`}
+        id="language-selector-toggle"
+        className={`language-selector-button${isLanguageDropdownOpen ? ' open' : ''}`}
         aria-haspopup="listbox"
-        aria-expanded={isOpen}
+        aria-expanded={isLanguageDropdownOpen}
         aria-label={ARIA_LABELS.LANGUAGE}
-        onClick={handleToggle}
-        title="Translate — Google Translate"
+        onClick={toggleDropdownVisibility}
+        title="Translate via Google Translate"
       >
         <GlobeIcon />
-        <span className="lang-flag">{selectedLanguage.flag}</span>
-        <span className="lang-label-text">{selectedLanguage.label}</span>
+        <span className="language-flag-display">
+          {currentSelectedLanguage.flagEmoji || (currentSelectedLanguage as any).flag}
+        </span>
+        <span className="language-label-text-display">
+          {currentSelectedLanguage.languageLabel || (currentSelectedLanguage as any).label}
+        </span>
         <ChevronDownIcon />
       </button>
 
-      {isOpen && (
+      {isLanguageDropdownOpen && (
         <div
-          id="lang-dropdown"
-          className="lang-dropdown"
+          id="language-options-dropdown"
+          className="language-options-dropdown"
           role="listbox"
-          aria-label="Language options"
-          aria-activedescendant={`lang-option-${selectedLanguage.code}`}
+          aria-label="Available translation languages"
         >
-          <div className="lang-powered">
+          <div className="google-translate-powered-by-label">
             Powered by Google Translate
           </div>
-          {LANGUAGES.map((language) => (
-            <button
-              key={language.code}
-              id={`lang-option-${language.code}`}
-              className={`lang-option${language.code === selectedLanguage.code ? ' active' : ''}`}
-              role="option"
-              aria-selected={language.code === selectedLanguage.code}
-              onClick={() => handleSelectLanguage(language as Language)}
-            >
-              <span className="lang-flag">{language.flag}</span>
-              {language.label}
-              {language.code === selectedLanguage.code && (
-                <span style={{ marginLeft: 'auto', color: 'var(--accent)', fontSize: '0.8rem' }}>
-                  ✓
-                </span>
-              )}
-            </button>
-          ))}
+          {LANGUAGES.map((languageItem: any) => {
+            const langConfig = languageItem as unknown as AppLanguageConfiguration;
+            const code = langConfig.languageCode || (languageItem as any).code;
+            const label = langConfig.languageLabel || (languageItem as any).label;
+            const flag = langConfig.flagEmoji || (languageItem as any).flag;
+
+            return (
+              <button
+                key={code}
+                className={`language-menu-item${code === activeLanguageCode ? ' active' : ''}`}
+                role="option"
+                aria-selected={code === activeLanguageCode}
+                onClick={() => applyLanguageSelection(langConfig)}
+              >
+                <span className="language-flag-display">{flag}</span>
+                {label}
+                {code === activeLanguageCode && (
+                  <span className="language-selection-indicator-icon">✓</span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -148,79 +203,102 @@ const LanguageSwitcher = () => {
 
 // ── Navigation Link ───────────────────────────────────────────────────────────
 
-/** A single navigation anchor that highlights when its section is active. */
-const NavLink = memo(({ href, label, aria, sectionId, activeSection, onClick }: NavLinkProps) => {
+/** 
+ * A specialized navigation link that reflects the active scroll state of the page.
+ */
+const ActiveSectionNavigationLink = memo(({ 
+  targetAnchorUrl, 
+  displayLabel, 
+  accessibleAriaLabel, 
+  targetSectionId, 
+  currentActiveSectionId, 
+  onLinkClickCallback 
+}: NavLinkProps) => {
+  const isLinkCurrentlyActive = currentActiveSectionId === targetSectionId;
+
   return (
     <li>
       <a
-        href={href}
-        aria-label={aria}
-        aria-current={activeSection === sectionId ? 'true' : undefined}
-        className={activeSection === sectionId ? 'active' : ''}
-        onClick={onClick}
+        href={targetAnchorUrl}
+        aria-label={accessibleAriaLabel}
+        aria-current={isLinkCurrentlyActive ? 'true' : undefined}
+        className={isLinkCurrentlyActive ? 'active' : ''}
+        onClick={onLinkClickCallback}
       >
-        {label}
+        {displayLabel}
       </a>
     </li>
   );
 });
 
-NavLink.displayName = 'NavLink';
+ActiveSectionNavigationLink.displayName = 'ActiveSectionNavigationLink';
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
 
-/** Primary navigation bar with language switcher, mobile menu, and active-section highlighting. */
+/** 
+ * Main application navigation container.
+ * 
+ * @returns {JSX.Element} The rendered Navbar component.
+ */
 export const Navbar = () => {
-  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
-  const activeSection = useActiveSection();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const activeViewportSectionId = useActiveSection();
 
-  const closeMenu = useCallback(() => setIsMenuOpen(false), []);
-  const toggleMenu = useCallback((e: MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    setIsMenuOpen((prev) => !prev);
+  const closeMobileNavigationMenu = useCallback(() => {
+    setIsMobileMenuOpen(false);
+  }, []);
+
+  const toggleMobileNavigationMenu = useCallback((clickEvent: MouseEvent<HTMLButtonElement>) => {
+    clickEvent.stopPropagation();
+    setIsMobileMenuOpen((previousState) => !previousState);
   }, []);
 
   return (
     <nav role="navigation" aria-label={ARIA_LABELS.MAIN_NAV}>
-      {/* Hidden Google Translate initialiser */}
       <GoogleTranslateInit />
 
-      <a href="#hero" className="nav-logo" aria-label={`${APP_NAME} — Home`}>
+      <a 
+        href="#hero" 
+        className="nav-logo" 
+        aria-label={`${APP_NAME} — Return to Home`}
+      >
         {APP_NAME}
       </a>
 
       <div className="nav-right">
         <button
           className="nav-mobile-btn"
-          id="nav-toggle"
-          aria-expanded={isMenuOpen}
-          aria-controls="nav-menu"
-          aria-label="Toggle navigation"
-          onClick={toggleMenu}
+          id="mobile-navigation-toggle"
+          aria-expanded={isMobileMenuOpen}
+          aria-controls="main-navigation-links"
+          aria-label="Toggle mobile menu"
+          onClick={toggleMobileNavigationMenu}
         >
-          {isMenuOpen ? '✕' : '☰'}
+          {isMobileMenuOpen ? '✕' : '☰'}
         </button>
 
         <ul
-          className={`nav-links${isMenuOpen ? ' open' : ''}`}
-          id="nav-menu"
+          className={`nav-links${isMobileMenuOpen ? ' open' : ''}`}
+          id="main-navigation-links"
           role="list"
         >
-          {NAV_LINKS.map((link) => (
-            <NavLink
-              key={link.href}
-              href={link.href}
-              label={link.label}
-              aria={link.aria}
-              sectionId={link.sectionId}
-              activeSection={activeSection}
-              onClick={closeMenu}
+          {NAV_LINKS.map((linkData) => (
+            <ActiveSectionNavigationLink
+              key={linkData.href}
+              targetAnchorUrl={linkData.href}
+              displayLabel={linkData.label}
+              accessibleAriaLabel={linkData.aria}
+              targetSectionId={linkData.sectionId}
+              currentActiveSectionId={activeViewportSectionId}
+              onLinkClickCallback={closeMobileNavigationMenu}
             />
           ))}
         </ul>
 
-        <LanguageSwitcher />
+        <LanguageSelectorDropdown />
       </div>
     </nav>
   );
 };
+
+
